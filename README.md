@@ -3,7 +3,7 @@
 Your scripts became a system you're afraid to touch. Learn architecture by building a complete Python application from domain to database. Master DDD, layered design, and hexagonal patterns through real development. Practical decisions over dogma.
 
 <p align="center">
-  <img src="book.png" alt="book cover" width="400">
+  <img src="book.png" alt="book cover" width="300">
 </p>
 
 <p align="center">
