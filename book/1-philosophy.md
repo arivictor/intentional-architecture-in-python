@@ -1,14 +1,3 @@
-<!--
-Title: Philosophy
-Chapter Objective: Readers must internalise that architecture isn't about folder structures or patterns but intentional decisions guided by constraints and goals. Architecture is a philosophy, a mindset shift.
-
-Code Progression:
-- No code in this chapter
-- This is purely philosophical - establishing mindset before mechanics
-- May include simple before/after examples to illustrate concepts (e.g., tight coupling vs loose coupling)
-- These examples should be minimal pseudocode or very simple Python snippets to illustrate ideas, not part of the running example
--->
-
 # Chapter 1: Philosophy
 
 Software architecture is a discipline of intentional decisions. A mindset. A way of understanding the system beneath the code. It’s not folder structures, and it is not obedience to the first pattern you learned.

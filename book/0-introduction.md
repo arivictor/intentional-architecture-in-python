@@ -4,15 +4,15 @@ You don't have to be a software architect to find yourself architecting software
 
 Architecture happens the moment the code stops being trivial. Most developers stumble into architecture the same way they stumble onto a solution: by accident. One day you're writing a script, and the next you're responsible for a growing system with expectations, users, and consequences. Along the way you had to make decisions about how to organise code, where logic belongs, and how different parts of the system interact.
 
-Every programmer is an architect, whether they like it or not.
+Every programmer is an architect, whether they like it or not. The moment you make decisions that shape how a system grows, you’re architecting.
 
-You can write code that works. But something happens as projects grow. A script becomes a file. A file becomes ten files. Ten files then become a codebase you're afraid to touch. Changes break things in unexpected places. Tests feel impossible. Logic lives everywhere and nowhere at once. It becomes almost impossible to walk someone through how the code works because even you don't fully understand it anymore.
+And once you’re in that role, intentionally or not, the problems change. You can write code that works. But something happens as projects grow. A script becomes a file. A file becomes ten files. Ten files then become a codebase you’re afraid to touch. Changes break things in unexpected places. Tests feel impossible. Logic lives everywhere and nowhere at once. It becomes almost impossible to walk someone through how the code works because even you don’t fully understand it anymore.
 
 That is where architecture helps.
 
 You have probably heard the terms: Clean Architecture, Domain-Driven Design, SOLID principles. They sound like answers. But when you tried to learn them, the concepts felt distant. Abstract. Too hard to connect to the code you write every day. Many patterns seem designed for massive enterprise systems with teams of dozens of developers.
 
-For me, the stepping stones between my spaghetti code and what I felt to be well-architected software was too far apart. I couldn't figure out how to make that leap. I would look at well-architected projects and feel completely lost in the structure and layout. Everything looked intentional, but none of the intentions were obvious. How did the developers know to do this? Why this separation and not another? What questions were they asking that I didn't even know existed?
+While I was trying to write better code, the gap between my spaghetti phases and the well-architected projects I admired felt impossibly wide. I couldn’t figure out how to cross it. I’d look at clean, intentional codebases and feel lost. The structure made sense to someone, just not to me. Why this separation and not another? What were the developers seeing or asking that I wasn’t?
 
 That confusion is where this book begins.
 
@@ -60,8 +60,12 @@ The domain is a vehicle. The architecture is the destination.
 
 ## What This Book Is Not
 
-Nothing in this book is new. These ideas are not mine. 
+The goal of this book is to give you something that stays useful, no matter what the industry is trending toward. To keep it timeless, I avoid specific frameworks, libraries, and tools. Those change. The principles don’t. This is not a FastAPI book, or a Django book, or a SQLAlchemy book. It’s a book about structuring code so that choosing or replacing those tools becomes simple.
 
-They come from decades of people solving the same problems: Robert C. Martin, Eric Evans, Alistair Cockburn, Martin Fowler. I'm translating their wisdom into something you can use today. This is an opinionated curation of established patterns that have helped me the most. By the end of this book, you'll have developed intuition for where code belongs and why. Not just because some book told you so, but because it makes sense. You'll understand that software architecture is philosophy applied to code.
+Nothing here is new or groundbreaking, and none of these ideas originate with me.
 
-Take what resonates. Leave what doesn't.
+They come from decades of people wrestling with the same problems: Robert C. Martin, Eric Evans, Alistair Cockburn, Martin Fowler, and many others. My contribution is translation. Curating the patterns that have consistently helped me and presenting them in a way that’s accessible to anyone taking their first deliberate steps into architecture.
+
+By the end, you’ll have intuition for where code belongs and why. Not because a book told you so, but because it aligns with how you think about systems. You’ll see that software architecture is philosophy applied to code.
+
+Take what resonates. Leave what doesn’t.
