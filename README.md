@@ -13,7 +13,7 @@ Your scripts became a system you're afraid to touch. Learn architecture by build
 ## Contents
 
 * [Introduction](book/0-introduction.md)
-* [Philosophy: Architecture as Mindset](book/1-philosophy.md)
+* [Philosophy](book/1-philosophy.md)
 * [SOLID](book/2-solid.md)
 * [Layers](book/3-layers.md)
 * [Entities](book/4-entities.md)
