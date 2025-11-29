@@ -1,8 +1,8 @@
-# Chapter 6: Use Cases
+# Chapter 5: Use Cases
 
 The domain understands the rules. The application layer makes them happen.
 
-In Chapters 4 and 5, we built a rich domain model. Entities that enforce invariants. Value objects that make invalid states impossible. Aggregates that maintain consistency. Domain services that coordinate logic across multiple objects. The domain knows what it means to book a class, check capacity, deduct credits, enforce cancellation policies.
+In Chapters 4, we built a rich domain model. Entities that enforce invariants. Value objects that make invalid states impossible. Aggregates that maintain consistency. Domain services that coordinate logic across multiple objects. The domain knows what it means to book a class, check capacity, deduct credits, enforce cancellation policies.
 
 But the domain doesn't know *when* to do these things. It doesn't orchestrate workflows. It doesn't decide the order of operations. It doesn't load members from a database or send confirmation emails. That's not its job.
 

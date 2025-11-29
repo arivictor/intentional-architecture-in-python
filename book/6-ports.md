@@ -1,4 +1,4 @@
-# Chapter 7: Ports
+# Chapter 6: Ports
 
 You can't run the application without infrastructure. But you shouldn't depend on it.
 

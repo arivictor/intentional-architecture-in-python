@@ -1,4 +1,4 @@
-# Chapter 8: Infrastructure Implementation
+# Chapter 7: Infrastructure Implementation
 
 Ports define the contract. Adapters fulfill it.
 
