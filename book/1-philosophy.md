@@ -39,15 +39,150 @@ The system you end up with is a direct reflection of the constraints you operate
 
 You don't get to design in a vacuum. You have deadlines. You have team size. You have legacy systems to integrate with, limited budgets, performance requirements, and stakeholder expectations. These constraints aren't obstacles to good architecture, they're the very thing that defines it.
 
-A solo developer building a prototype faces different constraints than a team of fifty maintaining a decade-old platform. The right architecture for one is catastrophic for the other. This is why copying what Google does rarely works. Their constraints are not yours. Their problems are not yours.
+Let's make this concrete. The same gym booking system, built under different constraints, produces radically different architectures.
 
-Good architecture emerges from honest assessment of the forces acting on your system. Time pressure might mean you defer certain abstractions until they're actually needed. A small team might favour simplicity over theoretical purity because maintainability matters more than perfection. A regulated industry might demand audit trails and explicit boundaries that feel like overkill elsewhere.
+### Solo Developer vs. 50-Person Team
 
-These constraints reveal what actually matters in your context. They force you to prioritise. They prevent you from over-engineering solutions to problems you don't have. They make you choose.
+**Solo developer building a side project:**
+
+You know the entire codebase. You can change anything without coordination. Communication overhead is zero. Your constraint is time—you're building this after work.
+
+**The right architecture:** Simple. Direct. A single file might be fine. Use SQLite, not PostgreSQL with read replicas. Skip the abstraction layers. You can refactor later if it grows. The code lives in your head, so documentation can be minimal.
+
+```python
+# This is fine for a solo project
+def book_class(member_id, class_id):
+    conn = sqlite3.connect('gym.db')
+    cursor = conn.cursor()
+    cursor.execute("INSERT INTO bookings ...")
+    conn.commit()
+```
+
+**50-person team maintaining production software:**
+
+No one knows the entire codebase. Changes require coordination. Communication overhead is high. Multiple teams touch the same system. Your constraint is coordination—you need clear boundaries.
+
+**The right architecture:** Layered. Explicit. Well-documented. Clear ownership of modules. Comprehensive tests so changes don't break other teams' work. Abstractions that let teams work independently.
+
+```python
+# This is necessary for a large team
+class BookingService:
+    """
+    Owned by: Booking Team
+    Dependencies: Member Service, Class Service
+    """
+    def book_class(self, member_id: str, class_id: str) -> Booking:
+        # Clear boundaries, documented interfaces
+        # Other teams can understand without asking
+```
+
+The solo developer's architecture would drown the large team in confusion. The large team's architecture would paralyze the solo developer with overhead.
+
+### Greenfield vs. Legacy System
+
+**Greenfield project starting from scratch:**
+
+No existing code to work around. You choose your database, your framework, your patterns. Your constraint is uncertainty—you don't know if the project will succeed.
+
+**The right architecture:** Start simple. Prove the concept works. Don't build for scale you don't have. Use boring, proven technology. Defer abstractions until you understand the domain better.
+
+```python
+# Start here
+members = []  # In-memory is fine for MVP
+
+def create_member(name, email):
+    members.append({'name': name, 'email': email})
+```
+
+**Legacy system with 10 years of history:**
+
+Existing database schema you can't change. Existing APIs other systems depend on. Existing deployment pipeline. Your constraint is compatibility—you can't break what's already there.
+
+**The right architecture:** Work within the constraints. Create abstraction layers around the legacy parts. Use the Strangler Fig pattern—wrap old code, redirect traffic, replace incrementally. Accept that some parts will always be messy.
+
+```python
+# Reality of legacy systems
+class ModernBookingService:
+    def __init__(self):
+        # Must work with legacy database schema
+        self.legacy_db = LegacyDatabaseAdapter()
+        # But new code can be clean
+        self.modern_repo = BookingRepository()
+    
+    def book_class(self, member_id, class_id):
+        # Bridge between old and new
+        if self.is_legacy_member(member_id):
+            return self.legacy_db.book_class(member_id, class_id)
+        return self.modern_repo.book_class(member_id, class_id)
+```
+
+The greenfield approach would fail in legacy—you can't ignore existing systems. The legacy approach would slow down greenfield—you don't need to support what doesn't exist yet.
+
+### Startup vs. Enterprise
+
+**Startup racing to find product-market fit:**
+
+Requirements change daily. Features are experiments. Speed matters more than perfection. Your constraint is survival—ship or die.
+
+**The right architecture:** Optimize for iteration speed. Keep it simple enough to change completely. Avoid premature optimization. Technical debt is fine if it buys you learning. You might pivot next month.
+
+```python
+# Startup: optimize for change
+def book_class(member, fitness_class):
+    # Quick and dirty
+    # We'll refactor if this feature works
+    fitness_class.bookings.append(member)
+    send_email(member.email, "Booking confirmed!")
+```
+
+**Enterprise maintaining critical infrastructure:**
+
+Requirements are stable. Compliance is mandatory. Audit trails are required. Downtime costs millions. Your constraint is risk—you cannot break production.
+
+**The right architecture:** Optimize for reliability. Comprehensive logging. Explicit error handling. Multiple environments. Gradual rollouts. Feature flags. The code that handles one booking might be 200 lines, but it's bulletproof.
+
+```python
+# Enterprise: optimize for safety
+class BookingService:
+    def book_class(self, member_id: str, class_id: str) -> Result[Booking, Error]:
+        try:
+            # Comprehensive audit trail
+            self.audit_logger.log_attempt(member_id, class_id)
+            
+            # Explicit validation
+            if not self.validator.is_valid_booking(member_id, class_id):
+                self.audit_logger.log_validation_failure(member_id, class_id)
+                return Error("Invalid booking")
+            
+            # Transaction with rollback
+            with self.transaction_manager.begin():
+                booking = self.repository.create_booking(member_id, class_id)
+                self.audit_logger.log_success(booking.id)
+                return Success(booking)
+        except Exception as e:
+            self.error_tracker.record(e)
+            self.audit_logger.log_error(member_id, class_id, e)
+            self.alerting.notify_on_call(e)
+            return Error(str(e))
+```
+
+The startup approach would be reckless in enterprise. The enterprise approach would kill a startup's velocity.
+
+### The Pattern
+
+Different constraints demand different architectures. There is no "best" architecture. There's only the right architecture for your constraints.
+
+A solo developer doesn't need the coordination overhead of a large team. A startup doesn't need the safety mechanisms of an enterprise. A greenfield project doesn't need the compatibility layers of a legacy system.
+
+Good architecture emerges from honest assessment of the forces acting on your system. Time pressure might mean you defer certain abstractions until they're actually needed. A small team might favor simplicity over theoretical purity because maintainability matters more than perfection. A regulated industry might demand audit trails and explicit boundaries that feel like overkill elsewhere.
+
+These constraints reveal what actually matters in your context. They force you to prioritize. They prevent you from over-engineering solutions to problems you don't have. They make you choose.
 
 The best architects don't fight constraints. They understand them, respect them, and use them to make better decisions. Constraints clarify. They tell you what you can afford to ignore and what you absolutely must get right.
 
 Your architecture should fit your constraints like a key fits a lock. Not because it's the "correct" architecture, but because it's the right one for where you are right now.
+
+This is why copying what Google does rarely works. Their constraints are not yours. Their problems are not yours. Your 5-person startup doesn't need Google's infrastructure. Your solo project doesn't need microservices. Build for the constraints you have, not the ones you imagine.
 
 ## Essential Complexity vs. Accidental Complexity
 

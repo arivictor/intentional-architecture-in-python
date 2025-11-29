@@ -1,6 +1,10 @@
 # Chapter 2: SOLID
 
-Our simple script is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. It's ~120 lines of straightforward Python. Mission accomplished.
+Remember the script from Chapter 1? The one that worked? The 120 lines of functions and dictionaries that handled members, classes, and bookings? It's still working.
+
+But philosophy only takes you so far. Architecture isn't built on principles alone—it's built on decisions made when code demands them. Chapter 1 gave you the mindset. Now we're going to apply it.
+
+Our simple script is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. Mission accomplished.
 
 Then requirements change.
 

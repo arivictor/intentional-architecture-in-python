@@ -654,6 +654,6 @@ This structure scales. When you add a new feature, you immediately know where it
 
 The gym booking system now has a skeleton. The domain layer contains our core entities. The application layer is ready for use cases. Infrastructure and interface are placeholders waiting to be filled.
 
-In the next chapters (4 and 5), we'll dive deeper into the domain layer. You'll learn how to model complex business logic using entities, value objects, and aggregates. How to capture rules that don't fit neatly into a single class. How to make your domain rich and expressive, not just a collection of data containers.
+In the next chapter, we'll dive deeper into the domain layer. You'll learn how to model complex business logic using entities, value objects, and aggregates. How to capture rules that don't fit neatly into a single class. How to make your domain rich and expressive, not just a collection of data containers.
 
 The layers give you structure. The domain gives you meaning. Let's build that next.
