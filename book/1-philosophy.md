@@ -222,3 +222,127 @@ You'll know when good enough stops being enough. The code will tell you. Refacto
 Architecture is intentional, but intention includes knowing when not to architect. Sometimes the best decision is to keep it simple, ship it, and revisit it when you know more. That's not compromising. That's being pragmatic.
 
 Start with good enough. Evolve toward better. Perfect can wait.
+
+## Our Starting Point: A Simple Gym Booking System
+
+Let's put philosophy into practice. Throughout this book, we'll build a gym class booking system. But we won't start with perfect architecture. We'll start with something simple that works.
+
+Here's our first version—a script that handles the basics:
+
+```python
+# gym_booking.py
+from datetime import datetime
+
+# Our "database" - just dictionaries
+members = {}
+classes = {}
+bookings = {}
+
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    members[member_id] = {
+        'id': member_id,
+        'name': name,
+        'email': email,
+        'membership_type': membership_type,
+        'credits': 10 if membership_type == 'premium' else 5
+    }
+    return members[member_id]
+
+def create_class(class_id, name, capacity, day, start_time):
+    """Create a new fitness class."""
+    classes[class_id] = {
+        'id': class_id,
+        'name': name,
+        'capacity': capacity,
+        'day': day,
+        'start_time': start_time,
+        'bookings': []
+    }
+    return classes[class_id]
+
+def book_class(booking_id, member_id, class_id):
+    """Book a member into a class."""
+    # Check member exists
+    if member_id not in members:
+        raise ValueError("Member not found")
+    
+    # Check class exists
+    if class_id not in classes:
+        raise ValueError("Class not found")
+    
+    member = members[member_id]
+    fitness_class = classes[class_id]
+    
+    # Check capacity
+    if len(fitness_class['bookings']) >= fitness_class['capacity']:
+        raise ValueError("Class is full")
+    
+    # Check credits
+    if member['credits'] <= 0:
+        raise ValueError("Insufficient credits")
+    
+    # Create booking
+    bookings[booking_id] = {
+        'id': booking_id,
+        'member_id': member_id,
+        'class_id': class_id,
+        'status': 'confirmed',
+        'booked_at': datetime.now()
+    }
+    
+    # Update state
+    member['credits'] -= 1
+    fitness_class['bookings'].append(member_id)
+    
+    print(f"Booking confirmed for {member['name']} in {fitness_class['name']}")
+    return bookings[booking_id]
+
+def cancel_booking(booking_id):
+    """Cancel a booking."""
+    if booking_id not in bookings:
+        raise ValueError("Booking not found")
+    
+    booking = bookings[booking_id]
+    member = members[booking['member_id']]
+    fitness_class = classes[booking['class_id']]
+    
+    # Refund credit
+    member['credits'] += 1
+    
+    # Remove from class
+    fitness_class['bookings'].remove(booking['member_id'])
+    
+    # Update booking
+    booking['status'] = 'cancelled'
+    
+    print(f"Booking cancelled for {member['name']}")
+    return booking
+
+
+# Example usage
+if __name__ == "__main__":
+    # Set up some data
+    create_member("M001", "Alice Johnson", "alice@example.com", "premium")
+    create_member("M002", "Bob Smith", "bob@example.com", "basic")
+    
+    create_class("C001", "Yoga Flow", 20, "Monday", "09:00")
+    create_class("C002", "HIIT Training", 15, "Wednesday", "18:00")
+    
+    # Make some bookings
+    book_class("B001", "M001", "C001")
+    book_class("B002", "M002", "C002")
+    
+    # Cancel a booking
+    cancel_booking("B001")
+```
+
+This code works. It's less than 120 lines. You can understand it in a few minutes. It handles members, classes, and bookings. It validates capacity and credits. For a proof of concept, it's exactly what you need.
+
+But it has problems. You might not see them yet—they're hidden by simplicity. As requirements grow, this structure will strain. We'll discover the problems together, and we'll fix them using architectural patterns. Not because patterns are "correct," but because the code will demand them.
+
+**This is where we start.** A working script. Good enough for now. Ready to evolve.
+
+In the next chapter, we'll add a new requirement. The script will start to break down. And we'll see our first architectural principle emerge—not from theory, but from necessity.
+
+Architecture isn't something you impose on code. It's something that emerges when code asks for it.

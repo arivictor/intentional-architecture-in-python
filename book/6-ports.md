@@ -1,24 +1,66 @@
 # Chapter 6: Ports
 
-You can't run the application without infrastructure. But you shouldn't depend on it.
+We have use cases. `BookClassUseCase` orchestrates the booking workflow. `CancelBookingUseCase` handles cancellations and refunds. They're clean. They're focused. They work.
 
-In Chapter 6, we built use cases that orchestrate domain logic. `BookClassUseCase` coordinates members, classes, and bookings. `CancelBookingUseCase` handles refunds and notifications. `ProcessWaitlistUseCase` manages complex cross-aggregate workflows.
-
-They work. The logic is clean. The domain stays pure. But there's a problem we deliberately exposed: the use cases need infrastructure. They need to load data. They need to save changes. They need to send notifications.
-
-Look at this line again:
+But try to test them.
 
 ```python
-member = self.member_repository.get_by_id(member_id)
+def test_booking_deducts_credit():
+    # Need a real database
+    db = sqlite3.connect('test.db')
+    member_repo = SqliteMemberRepository(db)
+    class_repo = SqliteFitnessClassRepository(db)
+    booking_repo = SqliteBookingRepository(db)
+    
+    # Need a real email service (or mock it, coupling test to implementation)
+    email_service = SMTPNotificationService('localhost', 587)
+    
+    use_case = BookClassUseCase(member_repo, class_repo, booking_repo, email_service)
+    
+    # Now we can test... but we've set up a database and email server
+    # just to verify that booking deducts a credit
 ```
 
-What is `member_repository`? Right now, it's a concrete implementation. It knows about databases. It knows about SQL. It knows about connection strings and transactions. And our application layer—which should be pure business orchestration—depends on it.
+To test a simple business rule, you need infrastructure. Database. Email server. Or you need mocks, which couple your tests to implementation details.
 
-This violates the dependency rule. High-level policy shouldn't depend on low-level details. The application layer shouldn't care whether members come from PostgreSQL, MongoDB, or a CSV file. But right now, it does.
+Now try to swap implementations:
 
-This chapter solves that problem. We're going to define what the application needs without specifying how it's provided. We're going to create abstractions—ports—that let the application express its requirements while keeping infrastructure at arm's length.
+```python
+# Currently using SQLite
+class BookClassUseCase:
+    def __init__(self, member_repo, class_repo, booking_repo, notification):
+        # What types are these? Nowhere specified.
+        # In practice, they're concrete: SqliteMemberRepository, etc.
+        self.member_repository = member_repo
+        # ...
+```
 
-By the end, your use cases won't depend on concrete repositories or services. They'll depend on contracts. And those contracts will point dependencies inward, not outward.
+Want to switch from SQLite to PostgreSQL? You change the infrastructure, but because use cases **depend on concrete implementations**, you also have to change how you instantiate them. Want to use in-memory repositories for testing? Same problem.
+
+The dependency points the wrong way:
+
+```
+Application Layer (BookClassUseCase)
+        ↓ depends on
+Infrastructure Layer (SqliteMemberRepository, SMTPNotificationService)
+```
+
+This is backwards. High-level policy (use cases) shouldn't depend on low-level details (database choice). Infrastructure should depend on application, not the other way around.
+
+**Concrete problems this causes:**
+
+1. **Can't test without infrastructure:** Every test needs database setup and cleanup
+2. **Can't swap implementations easily:** Changing databases requires changing use cases
+3. **Can't deploy flexibly:** Want to run in AWS Lambda with DynamoDB? Use cases are coupled to SQLite
+4. **Violates dependency rule:** Application layer depends on infrastructure layer
+
+The code is asking for abstraction. Not because abstractions are "clean," but because this coupling is making change expensive.
+
+**We need ports.**
+
+A port is an abstraction that defines **what** the application needs from infrastructure, without specifying **how** it's provided. Use cases depend on ports. Infrastructure implements ports. Dependencies point inward.
+
+This chapter creates those abstractions and inverts the dependencies.
 
 ## The Dependency Problem
 
@@ -1169,6 +1211,61 @@ We need adapters.
 That's the next chapter. We've inverted the dependencies. We've created the contracts. Now we need to fulfill them with real infrastructure—databases, email services, APIs—while keeping the dependency direction correct.
 
 The application doesn't know about infrastructure. But infrastructure will know about the application's ports. And it will implement them.
+
+## When You Don't Need Ports
+
+Ports add indirection. They add files. They add abstraction. Before you define ports for everything, ask: do you need them?
+
+**You don't need ports if:**
+
+- You have a single, stable infrastructure that will never change (e.g., a company-mandated database)
+- Your application is small and simple (< 500 lines, a few operations)
+- You're building a proof-of-concept that might be thrown away
+- The infrastructure IS your application (e.g., a database migration script)
+- You only have one implementation and no plans for alternatives
+- Testing with real infrastructure is fast and easy
+- Your team is unfamiliar with abstraction and the learning curve is too steep
+
+In these cases, **depending directly on concrete infrastructure is fine:**
+
+```python
+# No port needed - just use the repository directly
+from infrastructure.sqlite_member_repository import SqliteMemberRepository
+
+class BookClassUseCase:
+    def __init__(self):
+        self.member_repo = SqliteMemberRepository('gym.db')
+    
+    def execute(self, member_id: str, class_id: str):
+        member = self.member_repo.get_by_id(member_id)
+        # ...
+```
+
+Simple. Direct. No abstraction overhead. If you're never swapping SQLite for PostgreSQL, why abstract it?
+
+**You DO need ports when you see these signals:**
+
+- You want to test use cases without infrastructure setup
+- You need to support multiple implementations (SQLite for dev, PostgreSQL for prod)
+- Infrastructure is slow and makes tests painful
+- You might migrate databases or services in the future
+- You're deploying to different environments with different infrastructure
+- Use cases are hard to test because of infrastructure coupling
+- You're building a library or framework that others will integrate with different backends
+
+These signals indicate that coupling to concrete infrastructure is causing pain.
+
+**Common misconception:** "Ports are always better because they're more flexible."
+
+Not true. Flexibility has a cost. More files. More indirection. More concepts to understand. If you don't need the flexibility, you're paying for nothing.
+
+**The right approach:** Start without ports. Depend directly on concrete implementations. When you feel the pain of coupling (hard to test, hard to swap, hard to deploy), introduce ports. Let the need emerge from real problems, not theoretical ones.
+
+We created ports for `MemberRepository` and `NotificationService` because we demonstrated concrete pain: couldn't test without database, couldn't swap implementations, violated dependency rule. If we only ever used SQLite and never tested, we might not need the abstraction yet.
+
+**One exception:** If you're building a system that will definitely need multiple implementations (documented requirement, not speculation), start with ports. But be honest about "definitely."
+
+Architecture responds to reality. Start simple. Abstract when it hurts.
 
 ## Summary
 

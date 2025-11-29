@@ -1,16 +1,32 @@
 # Chapter 7: Infrastructure Implementation
 
-Ports define the contract. Adapters fulfill it.
+We have ports. We can't run the application yet.
 
-In Chapter 7, we inverted the dependencies. We created ports—abstract interfaces that define what the application needs from infrastructure. `MemberRepository` declares `get_by_id()` and `save()`. `NotificationService` declares `send_booking_confirmation()`. The use cases depend on these abstractions, not on concrete implementations.
+In Chapter 6, we inverted the dependencies. We created ports—abstract interfaces that define what the application needs from infrastructure. `MemberRepository` declares `get_by_id()` and `save()`. `NotificationService` declares `send_booking_confirmation()`. The use cases depend on these abstractions, not on concrete implementations.
 
 This solved the dependency problem. The application no longer knows about databases or email servers. It knows about contracts.
 
-But we can't run the application yet. Abstract classes can't be instantiated. Ports have no behaviour. They're promises waiting to be fulfilled.
+But try to run it:
 
-This chapter fulfills those promises. We're going to implement adapters—concrete classes that plug into our ports and connect the application to real infrastructure. PostgreSQL databases. SMTP email servers. File systems. External APIs. Whatever the application needs, adapters provide.
+```python
+# Try to create a use case
+use_case = BookClassUseCase(
+    member_repository=MemberRepository(),  # Error: Can't instantiate abstract class
+    class_repository=FitnessClassRepository(),  # Error: Can't instantiate abstract class
+    booking_repository=BookingRepository(),  # Error: Can't instantiate abstract class
+    notification_service=NotificationService()  # Error: Can't instantiate abstract class
+)
+```
 
-By the end, you'll have a complete, working system. Use cases orchestrating domain logic. Ports defining boundaries. Adapters connecting to infrastructure. Everything wired together through dependency injection. A system you can actually run.
+Abstract classes can't be instantiated. Ports have no behaviour. They're interfaces, not implementations. We've defined what we need, but we haven't provided it.
+
+**We can't run the application.** We can't execute a booking. We can't save data. We can't send notifications. The architecture is beautiful, but it does nothing.
+
+This is the gap between design and reality. Ports define the contract. Now we need adapters to fulfill it.
+
+**This chapter makes the system real.** We're going to implement adapters—concrete classes that plug into our ports and connect the application to actual infrastructure. SQLite databases. JSON files. In-memory dictionaries. SMTP email servers. Everything the application needs to actually work.
+
+By the end, you'll have a complete, running system. Not just architecture diagrams. Not just abstractions. A system you can execute, test, and deploy.
 
 From abstract to concrete. From design to implementation. Let's build the adapters.
 
@@ -36,9 +52,9 @@ class MemberRepository(ABC):
         pass
 
 # The adapter (this chapter)
-class PostgresMemberRepository(MemberRepository):
-    def __init__(self, session):
-        self.session = session
+class SqliteMemberRepository(MemberRepository):
+    def __init__(self, db_path: str):
+        self.db_path = db_path
     
     def get_by_id(self, member_id: str) -> Optional[Member]:
         # SQL query to load member data
@@ -55,386 +71,395 @@ The adapter inherits from the port. It implements the abstract methods. It knows
 
 This is the adapter pattern. The port defines the interface the application expects. The adapter implements it using infrastructure the application knows nothing about.
 
-## Building Database Adapters with SQLAlchemy
+## Building Repository Adapters
 
-Let's implement repository adapters using SQLAlchemy, a popular Python ORM. We'll connect to PostgreSQL, but the pattern works for any database.
+The beauty of ports and adapters is swappability. The application depends on `MemberRepository`, an abstraction. We can implement that abstraction with any persistence mechanism we want. SQLite. JSON files. In-memory dictionaries. PostgreSQL. The application doesn't care.
 
-First, we need to map our domain entities to database tables. SQLAlchemy uses declarative base classes for this:
+To demonstrate this, we'll implement the same repository port three different ways:
+
+1. **In-memory**: Simple dictionaries. Perfect for testing.
+2. **JSON file**: Persistent but simple. No external dependencies.
+3. **SQLite**: Real database using Python's standard library.
+
+Same port. Same contract. Three different infrastructures. This is the power of the adapter pattern.
+
+### Implementation 1: In-Memory Repository
+
+Let's start with the simplest adapter—an in-memory dictionary:
 
 ```python
-# infrastructure/database/models.py
-from sqlalchemy import Column, String, Integer, Float, DateTime, ForeignKey, Enum
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
-from datetime import datetime
+# infrastructure/persistence/in_memory_member_repository.py
+from typing import Optional, List, Dict
 
-Base = declarative_base()
+from domain.entities import Member
+from application.ports.repositories import MemberRepository
 
 
-class MemberModel(Base):
-    """SQLAlchemy model for Member persistence."""
-    __tablename__ = 'members'
+class InMemoryMemberRepository(MemberRepository):
+    """
+    In-memory implementation of MemberRepository.
     
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    email = Column(String, unique=True, nullable=False)
-    credits = Column(Integer, nullable=False, default=0)
-    membership_type = Column(String, nullable=False)
-    membership_price = Column(Float, nullable=False)
-    membership_credits_per_month = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class FitnessClassModel(Base):
-    """SQLAlchemy model for FitnessClass persistence."""
-    __tablename__ = 'fitness_classes'
+    Stores members in a dictionary. Fast and simple.
+    Perfect for testing. Data doesn't persist across restarts.
+    """
     
-    id = Column(String, primary_key=True)
-    name = Column(String, nullable=False)
-    capacity = Column(Integer, nullable=False)
-    day_of_week = Column(Integer, nullable=False)  # 1=Monday, 7=Sunday
-    start_time = Column(String, nullable=False)    # Store as "HH:MM"
-    end_time = Column(String, nullable=False)
-    bookings = Column(String)  # JSON array of member IDs
-
-
-class BookingModel(Base):
-    """SQLAlchemy model for Booking persistence."""
-    __tablename__ = 'bookings'
+    def __init__(self):
+        self._members: Dict[str, Member] = {}
     
-    id = Column(String, primary_key=True)
-    member_id = Column(String, ForeignKey('members.id'), nullable=False)
-    class_id = Column(String, ForeignKey('fitness_classes.id'), nullable=False)
-    status = Column(String, nullable=False)
-    booked_at = Column(DateTime, default=datetime.utcnow)
-    cancelled_at = Column(DateTime, nullable=True)
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        """Retrieve a member by ID."""
+        return self._members.get(member_id)
+    
+    def save(self, member: Member) -> None:
+        """Save a member to the in-memory store."""
+        self._members[member.id] = member
+    
+    def find_by_email(self, email: str) -> Optional[Member]:
+        """Find a member by email address."""
+        for member in self._members.values():
+            if member.email.value == email:
+                return member
+        return None
+    
+    def list_all(self) -> List[Member]:
+        """Return all members."""
+        return list(self._members.values())
 ```
 
-These are ORM models—database representations of our domain concepts. They're not the same as domain entities. Domain entities have behaviour and enforce rules. ORM models are data containers that map to tables.
+That's it. No database. No SQL. No ORM. Just a Python dictionary. The adapter implements the port's interface using whatever infrastructure makes sense.
 
-Keeping them separate is crucial. The domain stays pure. Infrastructure handles persistence details.
+The use cases don't know. They call `repository.save(member)`. They don't know if it's going to a dictionary, a file, or a database. They don't care.
 
-Now we implement the adapter that translates between them:
+### Implementation 2: JSON File Repository
+
+Now let's persist to disk using JSON files:
 
 ```python
-# infrastructure/database/member_repository.py
+# infrastructure/persistence/json_member_repository.py
+import json
 from typing import Optional, List
-from sqlalchemy.orm import Session
+from pathlib import Path
 
 from domain.entities import Member
 from domain.value_objects import EmailAddress, MembershipType
 from application.ports.repositories import MemberRepository
-from infrastructure.database.models import MemberModel
 
 
-class SQLAlchemyMemberRepository(MemberRepository):
+class JsonMemberRepository(MemberRepository):
     """
-    Adapter implementing MemberRepository using SQLAlchemy.
+    JSON file implementation of MemberRepository.
     
-    Translates between Member domain objects and database rows.
+    Stores members as JSON in a file. Simple persistence.
+    No external dependencies—just Python's standard library.
     """
     
-    def __init__(self, session: Session):
-        self.session = session
+    def __init__(self, file_path: str):
+        self.file_path = Path(file_path)
+        self._ensure_file_exists()
     
     def get_by_id(self, member_id: str) -> Optional[Member]:
-        """Load a member from the database and reconstruct domain object."""
-        model = self.session.query(MemberModel).filter_by(id=member_id).first()
+        """Load a member from the JSON file."""
+        data = self._read_file()
+        member_data = data.get(member_id)
         
-        if not model:
+        if not member_data:
             return None
         
-        return self._to_domain(model)
+        return self._to_domain(member_data)
     
     def save(self, member: Member) -> None:
-        """Persist a member domain object to the database."""
-        model = self.session.query(MemberModel).filter_by(id=member.id).first()
-        
-        if model:
-            # Update existing
-            self._update_from_domain(model, member)
-        else:
-            # Create new
-            model = self._to_model(member)
-            self.session.add(model)
-        
-        self.session.commit()
+        """Save a member to the JSON file."""
+        data = self._read_file()
+        data[member.id] = self._to_dict(member)
+        self._write_file(data)
     
     def find_by_email(self, email: str) -> Optional[Member]:
-        """Find a member by email address."""
-        model = self.session.query(MemberModel).filter_by(email=email).first()
+        """Find a member by email."""
+        data = self._read_file()
         
-        if not model:
-            return None
+        for member_data in data.values():
+            if member_data['email'] == email:
+                return self._to_domain(member_data)
         
-        return self._to_domain(model)
+        return None
     
     def list_all(self) -> List[Member]:
-        """Retrieve all members."""
-        models = self.session.query(MemberModel).all()
-        return [self._to_domain(model) for model in models]
+        """Return all members."""
+        data = self._read_file()
+        return [self._to_domain(m) for m in data.values()]
     
-    def _to_domain(self, model: MemberModel) -> Member:
-        """Convert database model to domain entity."""
-        email = EmailAddress(model.email)
+    def _ensure_file_exists(self) -> None:
+        """Create the JSON file if it doesn't exist."""
+        if not self.file_path.exists():
+            self.file_path.parent.mkdir(parents=True, exist_ok=True)
+            self._write_file({})
+    
+    def _read_file(self) -> dict:
+        """Read and parse the JSON file."""
+        with open(self.file_path, 'r') as f:
+            return json.load(f)
+    
+    def _write_file(self, data: dict) -> None:
+        """Write data to the JSON file."""
+        with open(self.file_path, 'w') as f:
+            json.dump(data, f, indent=2)
+    
+    def _to_domain(self, data: dict) -> Member:
+        """Convert JSON data to a Member entity."""
+        email = EmailAddress(data['email'])
         membership = MembershipType(
-            name=model.membership_type,
-            credits_per_month=model.membership_credits_per_month,
-            price=model.membership_price
+            name=data['membership_type'],
+            credits_per_month=data['membership_credits_per_month'],
+            price=data['membership_price']
         )
         
         member = Member(
-            member_id=model.id,
-            name=model.name,
+            member_id=data['id'],
+            name=data['name'],
             email=email,
             membership_type=membership
         )
         
         # Restore credit state
-        member._credits = model.credits
+        member._credits = data['credits']
         
         return member
     
-    def _to_model(self, member: Member) -> MemberModel:
-        """Convert domain entity to database model."""
-        return MemberModel(
-            id=member.id,
-            name=member.name,
-            email=member.email.value,
-            credits=member.credits,
-            membership_type=member.membership_type.name,
-            membership_price=member.membership_type.price,
-            membership_credits_per_month=member.membership_type.credits_per_month
-        )
-    
-    def _update_from_domain(self, model: MemberModel, member: Member) -> None:
-        """Update existing model from domain entity."""
-        model.name = member.name
-        model.email = member.email.value
-        model.credits = member.credits
-        model.membership_type = member.membership_type.name
-        model.membership_price = member.membership_type.price
-        model.membership_credits_per_month = member.membership_type.credits_per_month
+    def _to_dict(self, member: Member) -> dict:
+        """Convert a Member entity to JSON-serializable dict."""
+        return {
+            'id': member.id,
+            'name': member.name,
+            'email': member.email.value,
+            'credits': member.credits,
+            'membership_type': member.membership_type.name,
+            'membership_price': member.membership_type.price,
+            'membership_credits_per_month': member.membership_type.credits_per_month
+        }
 ```
 
-Look at what's happening here. The adapter:
+More infrastructure, same interface. The adapter handles file I/O. It serializes domain objects to JSON and deserializes them back. The application layer doesn't know this is happening.
 
-1. **Depends on the port**: `class SQLAlchemyMemberRepository(MemberRepository)`. It implements the abstraction.
-2. **Knows about infrastructure**: SQLAlchemy session, queries, models. The application doesn't.
-3. **Translates between worlds**: `_to_domain()` converts database rows to domain objects. `_to_model()` does the reverse.
-4. **Handles persistence logic**: Creating vs updating. Committing transactions. Loading relationships.
+Notice the translation methods: `_to_domain()` and `_to_dict()`. They're the bridge between domain objects and JSON data. Every adapter needs translation logic. The specifics depend on the infrastructure.
 
-The translation methods are crucial. `_to_domain()` reconstructs a `Member` entity with all its value objects. `_to_model()` extracts the data needed for persistence. The domain and infrastructure remain separate.
+### Implementation 3: SQLite Repository
 
-Let's implement the booking repository:
+Now let's use a real database with Python's built-in `sqlite3` module:
 
 ```python
-# infrastructure/database/booking_repository.py
+# infrastructure/persistence/sqlite_member_repository.py
+import sqlite3
 from typing import Optional, List
-from sqlalchemy.orm import Session
 
-from domain.entities import Booking, BookingStatus
-from application.ports.repositories import BookingRepository
-from infrastructure.database.models import BookingModel
+from domain.entities import Member
+from domain.value_objects import EmailAddress, MembershipType
+from application.ports.repositories import MemberRepository
 
 
-class SQLAlchemyBookingRepository(BookingRepository):
-    """Adapter implementing BookingRepository using SQLAlchemy."""
+class SqliteMemberRepository(MemberRepository):
+    """
+    SQLite implementation of MemberRepository.
     
-    def __init__(self, session: Session):
-        self.session = session
+    Uses Python's built-in sqlite3 module. No external dependencies.
+    Provides real database persistence with SQL transactions.
+    """
     
-    def get_by_id(self, booking_id: str) -> Optional[Booking]:
-        """Load a booking from the database."""
-        model = self.session.query(BookingModel).filter_by(id=booking_id).first()
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        self._create_table()
+    
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        """Load a member from the database."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
         
-        if not model:
+        cursor.execute(
+            "SELECT * FROM members WHERE id = ?",
+            (member_id,)
+        )
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
             return None
         
-        return self._to_domain(model)
+        return self._to_domain(row)
     
-    def save(self, booking: Booking) -> None:
-        """Persist a booking to the database."""
-        model = self.session.query(BookingModel).filter_by(id=booking.id).first()
+    def save(self, member: Member) -> None:
+        """Save a member to the database."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
         
-        if model:
-            self._update_from_domain(model, booking)
+        # Check if member exists
+        cursor.execute("SELECT id FROM members WHERE id = ?", (member.id,))
+        exists = cursor.fetchone() is not None
+        
+        if exists:
+            # Update existing
+            cursor.execute(
+                """
+                UPDATE members 
+                SET name = ?, email = ?, credits = ?, 
+                    membership_type = ?, membership_price = ?, 
+                    membership_credits_per_month = ?
+                WHERE id = ?
+                """,
+                (
+                    member.name,
+                    member.email.value,
+                    member.credits,
+                    member.membership_type.name,
+                    member.membership_type.price,
+                    member.membership_type.credits_per_month,
+                    member.id
+                )
+            )
         else:
-            model = self._to_model(booking)
-            self.session.add(model)
+            # Insert new
+            cursor.execute(
+                """
+                INSERT INTO members 
+                (id, name, email, credits, membership_type, 
+                 membership_price, membership_credits_per_month)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    member.id,
+                    member.name,
+                    member.email.value,
+                    member.credits,
+                    member.membership_type.name,
+                    member.membership_type.price,
+                    member.membership_type.credits_per_month
+                )
+            )
         
-        self.session.commit()
+        conn.commit()
+        conn.close()
     
-    def find_by_member(self, member_id: str) -> List[Booking]:
-        """Find all bookings for a specific member."""
-        models = self.session.query(BookingModel).filter_by(member_id=member_id).all()
-        return [self._to_domain(model) for model in models]
-    
-    def find_by_class(self, class_id: str) -> List[Booking]:
-        """Find all bookings for a specific class."""
-        models = self.session.query(BookingModel).filter_by(class_id=class_id).all()
-        return [self._to_domain(model) for model in models]
-    
-    def find_by_member_and_class(self, member_id: str, 
-                                  class_id: str) -> Optional[Booking]:
-        """Find a specific booking for a member in a class."""
-        model = self.session.query(BookingModel).filter_by(
-            member_id=member_id,
-            class_id=class_id
-        ).first()
+    def find_by_email(self, email: str) -> Optional[Member]:
+        """Find a member by email."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
         
-        if not model:
+        cursor.execute(
+            "SELECT * FROM members WHERE email = ?",
+            (email,)
+        )
+        
+        row = cursor.fetchone()
+        conn.close()
+        
+        if not row:
             return None
         
-        return self._to_domain(model)
+        return self._to_domain(row)
     
-    def find_by_status(self, status: BookingStatus) -> List[Booking]:
-        """Find all bookings with a given status."""
-        models = self.session.query(BookingModel).filter_by(
-            status=status.value
-        ).all()
-        return [self._to_domain(model) for model in models]
+    def list_all(self) -> List[Member]:
+        """Return all members."""
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        cursor.execute("SELECT * FROM members")
+        rows = cursor.fetchall()
+        conn.close()
+        
+        return [self._to_domain(row) for row in rows]
     
-    def _to_domain(self, model: BookingModel) -> Booking:
-        """Convert database model to domain entity."""
-        booking = Booking(
-            booking_id=model.id,
-            member_id=model.member_id,
-            class_id=model.class_id
+    def _create_table(self) -> None:
+        """Create the members table if it doesn't exist."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS members (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                credits INTEGER NOT NULL DEFAULT 0,
+                membership_type TEXT NOT NULL,
+                membership_price REAL NOT NULL,
+                membership_credits_per_month INTEGER NOT NULL
+            )
+            """
         )
         
-        # Restore status from database
-        booking._status = BookingStatus(model.status)
-        booking._booked_at = model.booked_at
-        booking._cancelled_at = model.cancelled_at
-        
-        return booking
+        conn.commit()
+        conn.close()
     
-    def _to_model(self, booking: Booking) -> BookingModel:
-        """Convert domain entity to database model."""
-        return BookingModel(
-            id=booking.id,
-            member_id=booking.member_id,
-            class_id=booking.class_id,
-            status=booking.status.value,
-            booked_at=booking._booked_at,
-            cancelled_at=booking._cancelled_at
+    def _to_domain(self, row: sqlite3.Row) -> Member:
+        """Convert a database row to a Member entity."""
+        email = EmailAddress(row['email'])
+        membership = MembershipType(
+            name=row['membership_type'],
+            credits_per_month=row['membership_credits_per_month'],
+            price=row['membership_price']
         )
-    
-    def _update_from_domain(self, model: BookingModel, booking: Booking) -> None:
-        """Update existing model from domain entity."""
-        model.status = booking.status.value
-        model.cancelled_at = booking._cancelled_at
+        
+        member = Member(
+            member_id=row['id'],
+            name=row['name'],
+            email=email,
+            membership_type=membership
+        )
+        
+        # Restore credit state
+        member._credits = row['credits']
+        
+        return member
 ```
 
-Same pattern. Implement the port. Translate between domain and database. Keep the layers separate.
+This is a real database adapter. SQL queries. Transactions. Row mapping. But the interface is identical to the in-memory and JSON versions.
 
-One more repository—fitness classes:
+Look at the pattern:
+
+1. **Infrastructure details in the adapter**: Connection management, SQL, row mapping.
+2. **Domain translation**: `_to_domain()` reconstructs domain objects from database rows.
+3. **Port implementation**: Same methods as the other adapters.
+
+The application doesn't know which implementation it's using. It just knows `MemberRepository`.
+
+### The Power of Swappability
+
+Here's the remarkable thing. This code:
 
 ```python
-# infrastructure/database/class_repository.py
-from typing import Optional, List
-from datetime import time
-import json
-from sqlalchemy.orm import Session
-
-from domain.entities import FitnessClass
-from domain.value_objects import ClassCapacity, TimeSlot, DayOfWeek
-from application.ports.repositories import FitnessClassRepository
-from infrastructure.database.models import FitnessClassModel
-
-
-class SQLAlchemyFitnessClassRepository(FitnessClassRepository):
-    """Adapter implementing FitnessClassRepository using SQLAlchemy."""
+# application/use_cases/register_member.py
+class RegisterMember:
+    def __init__(self, member_repository: MemberRepository):
+        self.member_repository = member_repository
     
-    def __init__(self, session: Session):
-        self.session = session
-    
-    def get_by_id(self, class_id: str) -> Optional[FitnessClass]:
-        """Load a fitness class from the database."""
-        model = self.session.query(FitnessClassModel).filter_by(id=class_id).first()
-        
-        if not model:
-            return None
-        
-        return self._to_domain(model)
-    
-    def save(self, fitness_class: FitnessClass) -> None:
-        """Persist a fitness class to the database."""
-        model = self.session.query(FitnessClassModel).filter_by(id=fitness_class.id).first()
-        
-        if model:
-            self._update_from_domain(model, fitness_class)
-        else:
-            model = self._to_model(fitness_class)
-            self.session.add(model)
-        
-        self.session.commit()
-    
-    def find_by_time_slot(self, time_slot: TimeSlot) -> List[FitnessClass]:
-        """Find all classes in a given time slot."""
-        models = self.session.query(FitnessClassModel).filter_by(
-            day_of_week=time_slot.day.value,
-            start_time=time_slot.start_time.strftime("%H:%M")
-        ).all()
-        
-        return [self._to_domain(model) for model in models]
-    
-    def list_all(self) -> List[FitnessClass]:
-        """Retrieve all fitness classes."""
-        models = self.session.query(FitnessClassModel).all()
-        return [self._to_domain(model) for model in models]
-    
-    def _to_domain(self, model: FitnessClassModel) -> FitnessClass:
-        """Convert database model to domain entity."""
-        capacity = ClassCapacity(model.capacity)
-        
-        # Parse time strings back to time objects
-        start_time = time.fromisoformat(model.start_time)
-        end_time = time.fromisoformat(model.end_time)
-        day = DayOfWeek(model.day_of_week)
-        
-        time_slot = TimeSlot(day, start_time, end_time)
-        
-        fitness_class = FitnessClass(
-            class_id=model.id,
-            name=model.name,
-            capacity=capacity,
-            time_slot=time_slot
-        )
-        
-        # Restore bookings from JSON
-        if model.bookings:
-            fitness_class._bookings = json.loads(model.bookings)
-        
-        return fitness_class
-    
-    def _to_model(self, fitness_class: FitnessClass) -> FitnessClassModel:
-        """Convert domain entity to database model."""
-        return FitnessClassModel(
-            id=fitness_class.id,
-            name=fitness_class.name,
-            capacity=fitness_class.capacity.value,
-            day_of_week=fitness_class.time_slot.day.value,
-            start_time=fitness_class.time_slot.start_time.strftime("%H:%M"),
-            end_time=fitness_class.time_slot.end_time.strftime("%H:%M"),
-            bookings=json.dumps(fitness_class._bookings)
-        )
-    
-    def _update_from_domain(self, model: FitnessClassModel, 
-                           fitness_class: FitnessClass) -> None:
-        """Update existing model from domain entity."""
-        model.name = fitness_class.name
-        model.capacity = fitness_class.capacity.value
-        model.day_of_week = fitness_class.time_slot.day.value
-        model.start_time = fitness_class.time_slot.start_time.strftime("%H:%M")
-        model.end_time = fitness_class.time_slot.end_time.strftime("%H:%M")
-        model.bookings = json.dumps(fitness_class._bookings)
+    def execute(self, name: str, email: str, membership_type: str):
+        # ... domain logic ...
+        self.member_repository.save(member)
 ```
 
-Notice how we handle value objects. `ClassCapacity` wraps an integer. `TimeSlot` contains a day and times. The adapter extracts these components for storage and reconstructs them when loading.
+Works with all three adapters. You can swap them at runtime:
 
-This is the adapter's job: preserve domain richness while working with infrastructure constraints.
+```python
+# Using in-memory for testing
+repository = InMemoryMemberRepository()
+use_case = RegisterMember(repository)
+
+# Using JSON for simple persistence
+repository = JsonMemberRepository("data/members.json")
+use_case = RegisterMember(repository)
+
+# Using SQLite for production
+repository = SqliteMemberRepository("data/gym.db")
+use_case = RegisterMember(repository)
+```
+
+Same use case. Same domain logic. Different infrastructure. This is architectural flexibility.
+
+You can start with in-memory for development. Switch to JSON when you need persistence. Move to SQLite when you need queries. Eventually migrate to PostgreSQL if you need scale. The use cases don't change. The domain doesn't change. Only the adapter changes.
+
+This is why we inverted the dependencies.
 
 ## Implementing Service Adapters
 
@@ -776,15 +801,12 @@ Here's a simple composition root that wires everything together:
 
 ```python
 # infrastructure/composition.py
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-
 from application.use_cases.book_class import BookClassUseCase
 from application.use_cases.cancel_booking import CancelBookingUseCase
 from application.use_cases.process_waitlist import ProcessWaitlistUseCase
-from infrastructure.database.member_repository import SQLAlchemyMemberRepository
-from infrastructure.database.booking_repository import SQLAlchemyBookingRepository
-from infrastructure.database.class_repository import SQLAlchemyFitnessClassRepository
+from infrastructure.persistence.sqlite_member_repository import SqliteMemberRepository
+from infrastructure.persistence.sqlite_booking_repository import SqliteBookingRepository
+from infrastructure.persistence.sqlite_class_repository import SqliteFitnessClassRepository
 from infrastructure.services.email_notification_service import SMTPNotificationService
 from infrastructure.services.console_notification_service import ConsoleNotificationService
 
@@ -797,16 +819,11 @@ class ApplicationContainer:
     Provides configured use cases ready to execute.
     """
     
-    def __init__(self, database_url: str, use_real_email: bool = False):
-        # Create database session
-        engine = create_engine(database_url)
-        SessionLocal = sessionmaker(bind=engine)
-        self.session = SessionLocal()
-        
-        # Create repository adapters
-        self.member_repository = SQLAlchemyMemberRepository(self.session)
-        self.booking_repository = SQLAlchemyBookingRepository(self.session)
-        self.class_repository = SQLAlchemyFitnessClassRepository(self.session)
+    def __init__(self, db_path: str, use_real_email: bool = False):
+        # Create repository adapters using SQLite
+        self.member_repository = SqliteMemberRepository(db_path)
+        self.booking_repository = SqliteBookingRepository(db_path)
+        self.class_repository = SqliteFitnessClassRepository(db_path)
         
         # Create service adapters
         if use_real_email:
@@ -850,8 +867,8 @@ class ApplicationContainer:
         )
     
     def cleanup(self):
-        """Clean up resources."""
-        self.session.close()
+        """Clean up resources (not needed for SQLite, but good practice)."""
+        pass
 ```
 
 The container creates everything in the right order. Database session first. Repositories next. Services after that. Use cases last.
@@ -868,7 +885,7 @@ from infrastructure.composition import ApplicationContainer
 def main():
     # Create the container with production configuration
     container = ApplicationContainer(
-        database_url="postgresql://user:password@localhost/fitness",
+        db_path="data/gym.db",
         use_real_email=False  # Use console notifications for now
     )
     
@@ -1008,32 +1025,31 @@ You can also write integration tests with real database adapters:
 ```python
 # tests/integration/test_database_repositories.py
 import pytest
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
+import tempfile
+import os
 
 from domain.entities import Member
 from domain.value_objects import EmailAddress, MembershipType
-from infrastructure.database.models import Base
-from infrastructure.database.member_repository import SQLAlchemyMemberRepository
+from infrastructure.persistence.sqlite_member_repository import SqliteMemberRepository
 
 
-class TestSQLAlchemyMemberRepository:
-    """Integration tests for database repository."""
+class TestSqliteMemberRepository:
+    """Integration tests for SQLite repository."""
     
     @pytest.fixture(autouse=True)
     def setup_database(self):
         """Create a test database before each test."""
-        # Use in-memory SQLite for tests
-        engine = create_engine('sqlite:///:memory:')
-        Base.metadata.create_all(engine)
+        # Use a temporary file for testing
+        self.db_file = tempfile.NamedTemporaryFile(delete=False)
+        self.db_path = self.db_file.name
+        self.db_file.close()
         
-        SessionLocal = sessionmaker(bind=engine)
-        self.session = SessionLocal()
-        self.repository = SQLAlchemyMemberRepository(self.session)
+        self.repository = SqliteMemberRepository(self.db_path)
         
         yield
         
-        self.session.close()
+        # Clean up
+        os.unlink(self.db_path)
     
     def test_save_and_retrieve_member(self):
         """Test that we can save and retrieve a member."""
@@ -1081,14 +1097,14 @@ from datetime import time
 from infrastructure.composition import ApplicationContainer
 from domain.entities import Member, FitnessClass
 from domain.value_objects import EmailAddress, MembershipType, ClassCapacity, TimeSlot, DayOfWeek
-from infrastructure.database.models import Base
-from sqlalchemy import create_engine
 
 
-def setup_database(database_url: str):
-    """Create database tables."""
-    engine = create_engine(database_url)
-    Base.metadata.create_all(engine)
+def setup_database(db_path: str):
+    """Create database tables (SQLite creates them automatically)."""
+    # SQLite repositories create tables in __init__
+    # Just ensure the directory exists
+    import os
+    os.makedirs(os.path.dirname(db_path) or '.', exist_ok=True)
 
 
 def seed_data(container: ApplicationContainer):
@@ -1213,12 +1229,13 @@ gym-booking/
 ├── infrastructure/
 │   ├── __init__.py
 │   ├── composition.py        # Dependency injection container
-│   ├── database/
+│   ├── persistence/
 │   │   ├── __init__.py
-│   │   ├── models.py         # SQLAlchemy ORM models
-│   │   ├── member_repository.py
-│   │   ├── booking_repository.py
-│   │   └── class_repository.py
+│   │   ├── in_memory_member_repository.py
+│   │   ├── json_member_repository.py
+│   │   ├── sqlite_member_repository.py
+│   │   ├── sqlite_booking_repository.py
+│   │   └── sqlite_class_repository.py
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── email_notification_service.py
@@ -1269,11 +1286,12 @@ def get_by_id(self, member_id: str) -> Optional[Member]:
 ```python
 def save(self, member: Member) -> None:
     try:
-        model = self._to_model(member)
-        self.session.add(model)
-        self.session.commit()
-    except SQLAlchemyError as e:
-        self.session.rollback()
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        # ... SQL insert/update logic ...
+        conn.commit()
+        conn.close()
+    except sqlite3.Error as e:
         raise RepositoryException(f"Failed to save member: {e}")
 ```
 
@@ -1302,7 +1320,7 @@ The use cases decide how to handle these exceptions. The adapters just raise the
 
 You create a new adapter when:
 
-**You need a different storage mechanism.** PostgreSQL for production. SQLite for development. MongoDB for a microservice.
+**You need a different storage mechanism.** PostgreSQL for production. SQLite for local development. In-memory for tests.
 
 **You need different behaviour in different environments.** Real email in production. Console output in development. Fake in tests.
 
@@ -1319,6 +1337,68 @@ You don't create a new adapter when:
 **You're adding new operations.** Extend the port first, then implement it in all adapters.
 
 Adapters translate between domains. If you're not translating, you probably don't need an adapter.
+
+## When You Don't Need Multiple Adapters
+
+We built three repository implementations: in-memory, JSON, and SQLite. We created multiple notification services. This demonstrates flexibility. But do you always need it?
+
+**You don't need multiple adapters if:**
+
+- You have one infrastructure that will never change (e.g., company-mandated PostgreSQL)
+- Your application is simple with no testing complexity
+- Building a prototype that might be thrown away
+- The effort to create multiple implementations exceeds the benefit
+- You're a solo developer and swappability isn't a priority
+- Testing with real infrastructure is fast and painless
+
+In these cases, **one concrete adapter is enough:**
+
+```python
+# Just implement the port once
+class MemberRepository(ABC):
+    @abstractmethod
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        pass
+
+# Single production implementation
+class PostgresMemberRepository(MemberRepository):
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        # PostgreSQL implementation
+        pass
+
+# Use it everywhere - dev, test, production
+use_case = BookClassUseCase(
+    PostgresMemberRepository(connection_string)
+)
+```
+
+You still have ports (for dependency inversion), but only one adapter. That's fine.
+
+**You DO need multiple adapters when:**
+
+- Testing with real infrastructure is slow or complex
+- You deploy to different environments (dev, staging, production) with different backends
+- You need fast, isolated tests without infrastructure setup
+- Infrastructure isn't stable or might change
+- Different use cases need different implementations (cache vs. database)
+- You're building a library others will integrate with various backends
+
+These signals indicate that one implementation isn't enough.
+
+**Common misconception:** "I need in-memory, JSON, SQLite, PostgreSQL, MongoDB implementations."
+
+Not true. That's over-engineering. Most applications need two implementations: **one for production, one for testing.** We showed three to demonstrate the pattern, not to suggest you need all of them.
+
+**The right approach:**
+
+1. Start with one adapter (production infrastructure)
+2. When tests get slow or complex, add a test adapter (usually in-memory)
+3. When you need to swap infrastructure, add another production adapter
+4. Don't create implementations you don't use
+
+We built three repository adapters because we wanted to demonstrate swappability and show that no external dependencies are needed. Your application might only need SQLite for everything, or PostgreSQL + in-memory for tests. Build what you need, when you need it.
+
+Architecture serves the problem. Not the pattern collection.
 
 ## The Architecture Is Complete
 
@@ -1342,7 +1422,7 @@ The dependency graph looks like this:
          ┌─────────▼──────────┬─────────────────┐
          │                    │                  │
 ┌────────▼──────────┐  ┌──────▼────────┐  ┌────▼──────────┐
-│ SQLAlchemyMember  │  │ SMTPNotif     │  │ InMemoryMember│
+│ SqliteMember      │  │ SMTPNotif     │  │ InMemoryMember│
 │ Repository        │  │ Service       │  │ Repository    │
 │ (Production)      │  │ (Production)  │  │ (Tests)       │
 └───────────────────┘  └───────────────┘  └───────────────┘
@@ -1350,7 +1430,7 @@ The dependency graph looks like this:
 
 Dependencies point inward. High-level policy doesn't depend on low-level details. Both depend on abstractions.
 
-You can swap PostgreSQL for MongoDB without touching use cases. You can swap SMTP for SendGrid without changing application logic. You can test with in-memory fakes without needing infrastructure.
+You can swap in-memory for SQLite without touching use cases. You can swap SQLite for PostgreSQL without changing application logic. You can test with in-memory repositories without needing infrastructure.
 
 This is hexagonal architecture fully realised. This is ports and adapters in practice. This is clean architecture applied.
 
@@ -1362,17 +1442,21 @@ The architecture serves the business logic. Not the other way around.
 
 Adapters implement ports using concrete infrastructure. They translate between the domain's language and the infrastructure's technical details.
 
-We built database adapters with SQLAlchemy—`SQLAlchemyMemberRepository`, `SQLAlchemyBookingRepository`, `SQLAlchemyFitnessClassRepository`. These adapters convert domain entities to ORM models and back. They handle queries, persistence, and transactions.
+We built three different repository implementations for the same port:
+
+1. **In-memory repositories** using Python dictionaries—fast, simple, perfect for testing
+2. **JSON file repositories** using Python's standard library—persistent but simple, no external dependencies
+3. **SQLite repositories** using Python's built-in `sqlite3`—real database with SQL, still no external dependencies
+
+All three implement `MemberRepository`. All three work with the same use cases. All three are swappable at runtime. This demonstrates the power of ports and adapters—choose the infrastructure that fits your needs without changing application code.
 
 We built service adapters for notifications—`SMTPNotificationService` for production and `ConsoleNotificationService` for development. Same port, different implementations, swappable at runtime.
-
-We created in-memory adapters for testing—simple dictionary-based repositories that implement the same ports as production adapters. Fast, deterministic, perfect for unit tests.
 
 We wired everything together with dependency injection through an `ApplicationContainer`. The container creates adapters and injects them into use cases. Configuration happens in one place. The rest of the application just receives what it needs.
 
 We demonstrated error handling in adapters—distinguishing between domain violations, infrastructure failures, and transient errors. Each type gets handled appropriately.
 
-The complete system works. You can run it. You can test it. You can swap implementations without changing application code.
+The complete system works. You can run it. You can test it. You can swap implementations without changing application code. You don't need frameworks or external dependencies to build well-architected software.
 
 The architecture is no longer theoretical. It's practical. It's real. It works.
 

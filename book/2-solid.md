@@ -1,18 +1,76 @@
 # Chapter 2: SOLID
 
-Let's build something.
+Our simple script is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. It's ~120 lines of straightforward Python. Mission accomplished.
 
-Throughout this book we'll work with a gym class booking system. A gym offers fitness classes: yoga, spin, HIIT. Members book spots in these classes. Some members have premium subscriptions, others pay per class. Classes have capacity limits. Bookings can be made, cancelled, confirmed.
+Then requirements change.
 
-It's a domain most of us understand intuitively. Simple enough to grasp quickly, complex enough to reveal real architectural challenges.
+The gym wants to send email confirmations when members book classes. They want different pricing for premium vs. basic members. They want to validate email addresses. They want to persist data to a database instead of losing everything when the script ends.
 
-We'll start here, in this chapter, with isolated examples that demonstrate how to think about writing maintainable code. The full system comes later. For now, we're establishing a mindset.
+You could add all of this to the existing functions. Throw in some SMTP code here, database connections there, validation checks everywhere. It would work. But let's see what happens.
 
-SOLID is an acronym. Five principles that guide how you write classes and structure code. Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion. They've been around for decades, and they matter because they help you write code that's easier to change.
+Here's `book_class()` with email notifications added:
 
-These aren't rules. They're ideas that emerged from watching what makes code rigid and what makes it flexible. Understanding them gives you a vocabulary for recognising problems and reasoning about solutions.
+```python
+def book_class(booking_id, member_id, class_id):
+    """Book a member into a class."""
+    if member_id not in members:
+        raise ValueError("Member not found")
+    
+    if class_id not in classes:
+        raise ValueError("Class not found")
+    
+    member = members[member_id]
+    fitness_class = classes[class_id]
+    
+    if len(fitness_class['bookings']) >= fitness_class['capacity']:
+        raise ValueError("Class is full")
+    
+    if member['credits'] <= 0:
+        raise ValueError("Insufficient credits")
+    
+    # Create booking
+    bookings[booking_id] = {
+        'id': booking_id,
+        'member_id': member_id,
+        'class_id': class_id,
+        'status': 'confirmed',
+        'booked_at': datetime.now()
+    }
+    
+    member['credits'] -= 1
+    fitness_class['bookings'].append(member_id)
+    
+    # NEW: Send email confirmation
+    import smtplib
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login("gym@example.com", "password")
+    message = f"Subject: Booking Confirmed\n\nHi {member['name']}, your booking for {fitness_class['name']} is confirmed."
+    server.sendmail("gym@example.com", member['email'], message)
+    server.quit()
+    
+    print(f"Booking confirmed for {member['name']} in {fitness_class['name']}")
+    return bookings[booking_id]
+```
 
-Let's work through each one. Not as abstract theory, but as practical decisions you'll face every time you write a class.
+This works. But notice what just happened:
+
+1. **You can't test the booking logic without sending real emails.** Every test hits an SMTP server.
+2. **The function is now slow.** Network calls every time you book a class.
+3. **It's fragile.** If the email server is down, bookings fail entirely.
+4. **It's hard to change.** Switching email providers means digging into booking logic.
+
+We've tangled two unrelated concerns: booking logic and email delivery. They change for different reasons, but now they're locked together. This is what happens when code starts to strain.
+
+The simple script was fine when it was simple. Now it's not.
+
+This is the signal. The code is asking for better structure. It's asking for SOLID.
+
+**SOLID is an acronym.** Five principles that guide how you write classes and structure code: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion.
+
+These aren't theoretical rules. They're patterns that emerged from watching what makes code rigid and what makes it flexible. They give you a vocabulary for recognizing problems and reasoning about solutions.
+
+Let's work through each one. Not as abstract theory, but as solutions to the actual pain points we're now experiencing with our script.
 
 ## Single Responsibility Principle
 

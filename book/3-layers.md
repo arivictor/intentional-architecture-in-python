@@ -1,48 +1,145 @@
 # Chapter 3: Layers
 
-SOLID principles help you write better classes. But classes don't exist in isolation. They need structure. Organisation. A place to live. 
+We applied SOLID principles. Our code is now organized into focused classes with clear responsibilities. `Member`, `FitnessClass`, and `Booking` handle domain concepts. `EmailService` handles notifications. `PricingService` calculates prices. Each class has one reason to change.
 
-This is where most developers hit a wall. You understand Single Responsibility. You know how to invert dependencies. But when you open your codebase, everything still feels chaotic. Files are scattered. Logic bleeds between concerns. You can't tell at a glance where business rules end and database code begins.
+The code is better. But it's still all in one file.
 
-The problem isn't the classes. It's the lack of architecture around them.
+Then new requirements arrive:
 
-Architecture isn't about making the code harder to navigate. It's about making it impossible to navigate wrong. When you structure your system in layers, you create boundaries that protect your core logic from the chaos of technical detail.
+**The gym needs to persist data.** When the script ends, everything is lost. They want to store members, classes, and bookings in a SQLite database.
 
-This chapter introduces a practical layered architecture. Four layers. Each with a clear purpose. Each solving a specific problem. Together, they give your SOLID principles room to breathe.
+**The gym wants a REST API.** Other systems need to integrate with the booking system. They want endpoints: `POST /bookings`, `GET /classes`, etc.
 
-## Why Layers?
+You could add database code to your classes. You could add Flask routes next to your domain logic. It would work. But let's see what happens.
 
-Software has different kinds of concerns. Business logic. Data persistence. User interfaces. External integrations. These concerns change for different reasons, at different rates, driven by different people.
+Here's our `Member` class with database persistence added:
 
-Business rules change when the business changes. Database code changes when you migrate to a new database. UI code changes when design trends evolve or users request new features. Each of these should be isolated so that changing one doesn't force you to change the others.
+```python
+import sqlite3
 
-Layers create that isolation.
+class Member:
+    def __init__(self, member_id: str, name: str, email: str, pricing_strategy):
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.pricing_strategy = pricing_strategy
+        self.bookings = []
+    
+    def save(self):
+        """Save member to database."""
+        conn = sqlite3.connect('gym.db')
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO members (id, name, email, pricing_type) VALUES (?, ?, ?, ?)",
+            (self.id, self.name, self.email, self.pricing_strategy.__class__.__name__)
+        )
+        conn.commit()
+        conn.close()
+    
+    @staticmethod
+    def load(member_id: str):
+        """Load member from database."""
+        conn = sqlite3.connect('gym.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT name, email, pricing_type FROM members WHERE id = ?", (member_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            # Reconstruct pricing strategy from database
+            if row[2] == 'PremiumPricing':
+                pricing = PremiumPricing()
+            elif row[2] == 'BasicPricing':
+                pricing = BasicPricing()
+            else:
+                pricing = PayPerClassPricing()
+            
+            return Member(member_id, row[0], row[1], pricing)
+        return None
+    
+    def get_class_price(self) -> float:
+        return self.pricing_strategy.calculate_price()
+```
 
-A layered architecture organises code by the type of concern it addresses. Business logic lives in one layer. Technical infrastructure lives in another. The interface users interact with lives somewhere else. Each layer has a specific job, and the boundaries between them are enforced.
+And here's the API endpoint mixed in:
 
-This isn't academic purity. It's practical necessity. When your business logic is tangled with database queries and API calls, you can't change any of them independently. Everything becomes one massive, interconnected mess. Layers break that coupling.
+```python
+from flask import Flask, request, jsonify
+
+app = Flask(__name__)
+
+@app.route('/bookings', methods=['POST'])
+def create_booking():
+    data = request.json
+    member = Member.load(data['member_id'])
+    fitness_class = FitnessClass.load(data['class_id'])
+    
+    if not member or not fitness_class:
+        return jsonify({'error': 'Not found'}), 404
+    
+    if fitness_class.is_full():
+        return jsonify({'error': 'Class is full'}), 400
+    
+    booking = Booking(generate_id(), member, fitness_class)
+    booking.save()
+    
+    return jsonify({'booking_id': booking.id}), 201
+```
+
+This works. But look at what we've lost:
+
+1. **Can't test business logic without a database.** Every test needs SQLite running.
+2. **Can't change storage mechanism.** Want PostgreSQL? Rewrite every domain class.
+3. **Can't test domain rules without Flask.** Testing capacity checks requires HTTP mocking.
+4. **Domain classes know about infrastructure.** `Member` understands SQL and database connections.
+5. **Business logic is tangled with technical details.** Where does the member concept end and the database concern begin?
+
+We've violated the very principles we just learned. `Member` now has multiple reasons to change:
+- Business rules change → modify `Member`
+- Database schema changes → modify `Member`
+- Storage mechanism changes → modify `Member`
+
+The Single Responsibility Principle is broken. And we can't apply Dependency Inversion because the domain directly depends on concrete infrastructure.
+
+**The code is asking for structure.** Not because layers are "correct," but because mixing these concerns makes everything harder.
+
+This is the signal. We need layers.
+
+## What Are Layers?
+
+Layers organize code by the type of concern it addresses. Business logic in one place. Database code in another. API handling somewhere else. Each layer has a specific job, and the boundaries between them are enforced.
+
+This isn't theoretical organization. It's solving the problem we just experienced:
+
+**Without layers:** Database code lives in `Member`. Can't test business rules without SQLite. Can't swap databases without rewriting domain classes.
+
+**With layers:** Database code lives in `infrastructure/`. Domain is pure business logic. Swap SQLite for PostgreSQL by changing one module, not twenty classes.
+
+The separation makes change possible. Business rules can evolve without touching database code. Database implementation can change without touching business rules. This is what we lost when we mixed everything together.
 
 ## The Four Layers
 
-We'll work with four layers. Not three, not five. Four is enough to separate concerns without creating unnecessary complexity.
+We'll separate our code into four layers:
 
-**Domain** contains your business logic. The rules. The entities. The concepts that make your system valuable. This is the heart of your application. It doesn't know about databases. It doesn't know about HTTP. It just knows the business.
+**Domain** - Pure business logic. The `Member`, `FitnessClass`, and `Booking` classes without any database code. Rules like "a class can't exceed capacity" or "premium members pay nothing." This layer knows nothing about SQLite, Flask, or email servers. It only knows the business.
 
-**Application** coordinates domain objects to fulfil use cases. It orchestrates. It doesn't contain business rules—those belong in the domain—but it knows how to combine domain objects to achieve specific goals. "Book a class." "Cancel a booking." "Process a payment." These are use cases, and they live here.
+**Application** - Use case orchestration. "Book a class" coordinates a member, a class, a booking, and notifications. It's not business logic (that's in domain), it's the workflow. It combines domain objects to achieve specific goals.
 
-**Infrastructure** handles technical details. Databases. File systems. Email servers. External APIs. Everything that touches the outside world. The domain defines what it needs, and infrastructure provides it. This layer is replaceable. If you swap MySQL for PostgreSQL, or SendGrid for Mailgun, only this layer changes.
+**Infrastructure** - Technical details. The SQLite code. The email sending. The file system. Everything that touches the outside world. This is where `Member.save()` and `Member.load()` should live, not in the domain class itself.
 
-**Interface** presents the system to the outside world. REST APIs. GraphQL endpoints. Command-line tools. Web interfaces. This is how users interact with your application. It translates external requests into application use cases and translates domain results back into responses.
+**Interface** - How the outside world talks to us. The Flask API endpoints. CLI commands. GraphQL resolvers. This layer translates HTTP requests into application use cases and domain results back into JSON.
 
-Each layer depends only on the layers below it. Domain depends on nothing. Application depends on domain. Infrastructure depends on domain and application. Interface depends on everything. This is the dependency rule, and it's non-negotiable.
+**The dependency rule:** Each layer only depends on layers below it.
+- Domain depends on nothing
+- Application depends on domain
+- Infrastructure depends on domain (to know what to persist)
+- Interface depends on application (to execute use cases)
 
-When you violate this rule, you create coupling that makes change expensive. When you honour it, you get flexibility.
+This rule is what makes layers work. Domain never imports from infrastructure. Infrastructure imports from domain. When we violated this by putting database code in `Member`, we broke the rule and created coupling.
 
-## From Examples to Structure
+## Refactoring Into Layers
 
-In the previous chapter, we built isolated examples. A `Member` class here. A `BookingService` there. Pricing strategies scattered across the page. They demonstrated SOLID principles, but they weren't organised into a system.
-
-Let's fix that.
+Let's take our SOLID classes and organize them into layers. We'll extract the database code from `Member`, separate the API endpoints from business logic, and create clear boundaries.
 
 Here's how our gym booking system looks when structured into layers:
 
@@ -262,6 +359,92 @@ The interface layer translates between the external world and your domain. HTTP 
 
 This layer knows about both the external world (HTTP, JSON, request formats) and the internal world (domain objects, application services). It's the translator.
 
+## What We Gained: Before and After
+
+Let's compare what we had at the start of this chapter with what we have now.
+
+**Before layers (mixed concerns):**
+
+```python
+# Everything tangled together
+class Member:
+    def save(self):
+        conn = sqlite3.connect('gym.db')
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO members ...", ...)
+        conn.commit()
+        conn.close()
+```
+
+**Problem:** Can't test `Member` without SQLite. Can't change database without rewriting domain class.
+
+**After layers (separated):**
+
+```python
+# Domain: domain/member.py
+class Member:
+    def __init__(self, member_id: str, name: str, email: str, pricing_strategy):
+        self.id = member_id
+        self.name = name
+        # Just business logic, no database
+
+# Infrastructure: infrastructure/member_repository.py
+class MemberRepository:
+    def save(self, member: Member):
+        conn = sqlite3.connect('gym.db')
+        # Database code lives here
+```
+
+**Benefit:** Test `Member` with nothing but Python. Swap SQLite for PostgreSQL by changing one file.
+
+---
+
+**Before layers (testing nightmare):**
+
+To test if premium members get free classes:
+1. Set up SQLite database
+2. Insert test member into database
+3. Load member from database
+4. Check pricing
+5. Clean up database
+
+**After layers (simple test):**
+
+```python
+def test_premium_pricing():
+    member = Member("M001", "Alice", "alice@example.com", PremiumPricing())
+    assert member.get_class_price() == 0
+```
+
+No database. No setup. No cleanup. Just business logic.
+
+---
+
+**Before layers (change is expensive):**
+
+Switching from SQLite to PostgreSQL requires:
+- Modifying `Member.save()`
+- Modifying `Member.load()`
+- Modifying `FitnessClass.save()`
+- Modifying `FitnessClass.load()`
+- Modifying `Booking.save()`
+- Modifying `Booking.load()`
+- Hope you didn't break business logic
+
+**After layers (change is contained):**
+
+Switching from SQLite to PostgreSQL requires:
+- Replace `infrastructure/member_repository.py`
+- Replace `infrastructure/class_repository.py`
+- Replace `infrastructure/booking_repository.py`
+- Domain layer untouched
+- Application layer untouched
+- Tests still pass
+
+---
+
+This is what separation buys you. Not theoretical purity. Practical flexibility. The ability to change infrastructure without touching business logic. The ability to test business rules without infrastructure. The ability to understand what the code does without drowning in how it does it.
+
 ## The Dependency Rule Visualised
 
 The imports tell the story. Here's how dependencies flow through our layers:
@@ -427,13 +610,37 @@ Now `FitnessClass` handles the business rule (capacity check) and the state chan
 
 Layers are guides, not laws. There are times when strict adherence creates more problems than it solves.
 
-If you're building a prototype, you don't need four layers. Two might be enough: domain and everything else. Get it working. Prove the concept. Refactor into layers when the complexity justifies it.
+**You don't need layers if:**
 
-If you're working on a small, stable feature that's unlikely to change, you can skip the abstraction. Directly accessing a database from an application service isn't always wrong. It depends on whether you expect that access to change.
+- You're building a proof-of-concept that might be thrown away
+- Your entire application is < 500 lines and unlikely to grow
+- You're creating a one-time data migration script
+- The project has one developer and no plans to scale
+- You're prototyping to learn the domain
+- Requirements are completely uncertain
+
+In these cases, a single file or simple script is perfectly fine. Adding layers creates overhead without benefit.
+
+**You DO need layers when you see these signals:**
+
+- Testing business logic requires setting up infrastructure (database, API, email server)
+- Changing one technical detail (database, email provider) requires touching business logic
+- You can't understand what the code does without understanding how it does it
+- New developers struggle to find where to add features
+- Changes break unrelated parts of the system
+- The codebase has grown past ~500-1000 lines
+- Multiple developers work on the code
+- The system will be maintained long-term
+
+These are pain signals. The code is asking for structure.
+
+**Start simple. Add layers when pain appears.**
+
+If you're building a prototype, don't start with four layers. Use two: domain and everything else. When the prototype becomes production code, refactor. When you feel the pain of mixed concerns, separate them. When testing becomes hard, introduce boundaries.
 
 The key is intention. If you violate a layer boundary, do it knowingly. Understand the tradeoff. Document why. Don't drift into violations by accident.
 
-Layers exist to manage complexity. If the complexity isn't there yet, you don't need the layers. Start simple. Add structure when pain appears.
+We started this chapter with database code in `Member` because new requirements appeared. That was the signal. If those requirements never came, the simple script from Chapter 1 would have been fine. Architecture responds to reality, not theory.
 
 ## Summary
 

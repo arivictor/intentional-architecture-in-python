@@ -1,20 +1,70 @@
 # Chapter 4: Domain
 
-The layers give you structure. The domain gives you meaning with entities and value objects.
+We have layers. Domain logic lives in the domain layer, separated from infrastructure and interface. The structure is solid. But the domain itself is still shallow.
 
-In Chapter 3, we organised our gym booking system into four layers. We created boundaries. We separated concerns. But the domain layer itself remained simple. Basic entities. Straightforward logic. Just enough to demonstrate where business rules belong.
+New requirements arrive that expose this shallowness:
 
-That was intentional. Structure first, depth second. But now it's time to go deeper.
+**Complex booking rules:** Members can't cancel bookings within 2 hours of class time. Premium members get priority when classes are full. Members can only book one class per time slot.
 
-The domain layer is the heart of your system. It's where the business lives. Not the database, not the API, not the framework—the actual concepts that make your system valuable. Members. Classes. Bookings. Capacity. Time. Rules about what can happen and when.
+**Credit system complexity:** Member credits expire after 30 days. Premium members get 10 credits per month, basic members get 5. Credits are deducted on booking and refunded on cancellation (with rules).
 
-Most developers treat the domain as a collection of data containers. Classes with properties and getters. Anemic objects that hold state but do nothing with it. The logic lives elsewhere—in services, in controllers, in whatever layer happens to need it. The domain becomes a passive victim of external manipulation.
+**Time slot conflicts:** Classes run at specific days and times. A member can't book two classes that overlap. The system needs to detect conflicts.
 
-This chapter teaches you to build a rich domain. A domain that understands itself. That enforces its own rules. That speaks the language of the business. We'll take the simple entities from Chapter 3 and give them depth. Identity. Behaviour. Constraints. We'll introduce value objects. We'll make the domain intelligent.
+**Data validation:** Email addresses must be valid. Class capacity must be between 1 and 50. Member names can't be empty. These rules need to be enforced everywhere.
 
-This is the first part of two chapters on domain modelling. Here, we'll focus on entities and value objects—the fundamental building blocks. In the second half of this chapter we'll explore aggregates, domain services, and more advanced patterns.
+Where does this logic go? Right now, our domain classes are simple data holders:
 
-When you're done with both sections, your domain won't just hold data. It will embody business logic.
+```python
+# domain/member.py
+class Member:
+    def __init__(self, member_id: str, name: str, email: str, pricing_strategy):
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.pricing_strategy = pricing_strategy
+        self.credits = 10  # Where do we enforce expiry? Valid range?
+    
+    def get_class_price(self) -> float:
+        return self.pricing_strategy.calculate_price()
+```
+
+This class can't enforce the credit rules. It doesn't understand expiry. It doesn't validate that email addresses are actually valid. It's a data container, not a domain model.
+
+We could add validation to the application layer:
+
+```python
+# application/booking_service.py
+class BookingService:
+    def book_class(self, member_id: str, class_id: str):
+        member = self.member_repo.get(member_id)
+        fitness_class = self.class_repo.get(class_id)
+        
+        # Validation scattered in the application layer
+        if member.credits <= 0:
+            raise ValueError("Insufficient credits")
+        
+        if len(fitness_class.bookings) >= fitness_class.capacity:
+            raise ValueError("Class is full")
+        
+        # Check time slot conflicts
+        for booking in member.bookings:
+            existing_class = self.class_repo.get(booking.class_id)
+            if self._times_overlap(existing_class.time, fitness_class.time):
+                raise ValueError("Time slot conflict")
+        
+        # More validation...
+        # Then create booking
+```
+
+But now the business rules are scattered. Half the validation is here, some might be in the API layer, some in other services. There's no single source of truth about what makes a valid booking.
+
+**This is the problem with anemic domain models.** The objects hold data, but the logic lives everywhere else. Rules are duplicated. Invariants aren't protected. You can create invalid states.
+
+The code is asking for a richer domain.
+
+**This chapter builds that domain.** We'll move from data containers to intelligent objects that understand and enforce business rules. We'll introduce entities with identity, value objects that make invalid states impossible, and aggregates that maintain consistency.
+
+The domain will stop being a passive data holder and become an active participant in business logic.
 
 ## What Makes a Domain Rich?
 
@@ -1127,6 +1177,63 @@ except BookingNotCancellableException as e:
 The booking knows its cancellation rules. The class manages its bookings. The member's credits are updated. The domain coordinates itself.
 
 This is a rich domain model. Business logic lives in domain objects. Rules are enforced by the types themselves. Impossible states are prevented by construction. The code reads like the business.
+
+## When You Don't Need Rich Domain Models
+
+Rich domain models have costs. Value objects add complexity. Aggregates require discipline. Domain services need careful boundaries. Before you rush to build a rich domain, ask: do you actually need it?
+
+**You don't need a rich domain model if:**
+
+- You're building a simple CRUD application (create, read, update, delete with minimal business logic)
+- Your business rules are straightforward validations (required fields, format checks, basic ranges)
+- You have a small, stable domain that rarely changes
+- You're building an internal tool or admin interface with minimal complexity
+- The application is primarily about data transformation or reporting, not business processes
+- Your team is unfamiliar with DDD and the learning curve outweighs the benefits
+- You're prototyping and domain understanding is still evolving
+
+In these cases, **simple data classes with validation are enough:**
+
+```python
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class Member:
+    id: str
+    name: str
+    email: str
+    credits: int = 0
+    
+    def __post_init__(self):
+        if self.credits < 0:
+            raise ValueError("Credits cannot be negative")
+```
+
+No value objects. No aggregates. No domain services. Just data with basic validation. This is perfectly fine for many applications.
+
+**You DO need a rich domain model when you see these signals:**
+
+- Business rules are complex and scattered across multiple services
+- The same validation logic is duplicated in many places
+- Invalid states are possible despite validation attempts
+- Business concepts aren't clearly represented in code
+- Domain experts struggle to recognize their terminology in your code
+- Rules change frequently and each change touches many files
+- You find yourself writing lots of defensive code ("this should never happen, but...")
+- Testing business logic requires understanding infrastructure
+
+These signals indicate that an anemic domain model is causing pain. The cure is richness.
+
+**Common misconception:** "Rich domain models are always better."
+
+Not true. They add complexity. They require more thought upfront. They have a learning curve. For simple domains, they're overkill. A user management system with basic CRUD operations doesn't need value objects for every field.
+
+**The right approach:** Start simple. Use plain classes with basic validation. When you feel the pain of scattered logic and duplicated rules, refactor toward richness. Let complexity drive the solution, not the other way around.
+
+We built a rich domain for the gym booking system because the requirements demanded it: credit expiry, time slot conflicts, cancellation rules, capacity management. These are genuinely complex business rules that deserve representation in the domain. Your application might not need this level of sophistication.
+
+Architecture serves the problem. Not the resume.
 
 ## Summary
 

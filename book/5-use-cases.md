@@ -1,18 +1,95 @@
 # Chapter 5: Use Cases
 
-The domain understands the rules. The application layer makes them happen.
+We have a rich domain. `Member`, `FitnessClass`, and `Booking` entities enforce business rules. Value objects like `TimeSlot` and `EmailAddress` make invalid states impossible. The domain layer is solid.
 
-In Chapters 4, we built a rich domain model. Entities that enforce invariants. Value objects that make invalid states impossible. Aggregates that maintain consistency. Domain services that coordinate logic across multiple objects. The domain knows what it means to book a class, check capacity, deduct credits, enforce cancellation policies.
+But now we need to actually use it. The gym wants multiple ways to book classes:
 
-But the domain doesn't know *when* to do these things. It doesn't orchestrate workflows. It doesn't decide the order of operations. It doesn't load members from a database or send confirmation emails. That's not its job.
+**Web API:** Users book through a REST endpoint  
+**Admin panel:** Staff books classes on behalf of members  
+**Automated system:** Process waitlist when someone cancels  
+**Bulk import:** Load bookings from a CSV file
 
-The domain is pure business logic. It's the instruments in an orchestra—each one knows how to play, but none of them knows the entire symphony.
+Each of these needs the same workflow: verify the member exists, check they have credits, verify class capacity, deduct credit, add booking, save changes, send notification. But where does this orchestration live?
 
-The application layer is the conductor. It takes those domain objects and combines them into complete workflows. It orchestrates use cases—the things users actually want to do with your system. "Book a class." "Cancel a booking." "Process the waitlist." These are use cases, and they live in the application layer.
+Right now, we're duplicating it everywhere:
 
-This chapter shows you how to build that layer. How to coordinate domain logic without duplicating it. How to keep use cases focused on orchestration, not business rules. And crucially, we'll expose a problem: use cases need infrastructure, but depending on it directly violates everything we've worked toward.
+```python
+# In the REST API handler
+@app.route('/bookings', methods=['POST'])
+def book_class_api():
+    data = request.json
+    
+    # Load domain objects
+    member = member_repo.get_by_id(data['member_id'])
+    fitness_class = class_repo.get_by_id(data['class_id'])
+    
+    # Orchestrate the workflow
+    if not member or not fitness_class:
+        return jsonify({'error': 'Not found'}), 404
+    
+    member.deduct_credit()
+    fitness_class.add_booking(member.id)
+    
+    booking = Booking(generate_id(), member.id, fitness_class.id)
+    
+    member_repo.save(member)
+    class_repo.save(fitness_class)
+    booking_repo.save(booking)
+    
+    email_service.send_confirmation(member, fitness_class)
+    
+    return jsonify({'booking_id': booking.id}), 201
 
-By the end, you'll understand both how to build the application layer and why it isn't enough on its own.
+
+# In the admin panel
+def admin_book_class(member_id, class_id):
+    # Same workflow duplicated
+    member = member_repo.get_by_id(member_id)
+    fitness_class = class_repo.get_by_id(class_id)
+    
+    if not member or not fitness_class:
+        raise ValueError("Not found")
+    
+    member.deduct_credit()
+    fitness_class.add_booking(member.id)
+    
+    booking = Booking(generate_id(), member.id, fitness_class.id)
+    
+    member_repo.save(member)
+    class_repo.save(fitness_class)
+    booking_repo.save(booking)
+    
+    email_service.send_confirmation(member, fitness_class)
+    
+    return booking
+
+
+# In the waitlist processor
+def process_waitlist_entry(waitlist_entry):
+    # Same workflow duplicated AGAIN
+    member = member_repo.get_by_id(waitlist_entry.member_id)
+    fitness_class = class_repo.get_by_id(waitlist_entry.class_id)
+    
+    # ... exact same logic repeated
+```
+
+This is a mess:
+
+1. **Duplication everywhere:** The booking workflow is copied in three places
+2. **No single source of truth:** Change the workflow? Update it in every location
+3. **Inconsistent behavior:** Easy to forget a step in one place but not another
+4. **Hard to test:** Have to test the workflow three times in three different contexts
+5. **No clear entry points:** Where do you look to understand "how does booking work?"
+
+We separated domain from infrastructure with layers. We enriched the domain with entities and value objects. But we haven't separated **orchestration** from **presentation**.
+
+The workflow logic (load → validate → domain operations → save → notify) doesn't belong in API handlers or admin interfaces. Those are just different ways to trigger the same operation.
+
+**The code is asking for use cases.**
+
+A use case is a single place that defines one complete workflow. "Book a class." "Cancel a booking." "Process waitlist." Each use case orchestrates domain objects and infrastructure to accomplish a specific goal. Interface layers call use cases. They don't duplicate orchestration logic.
+
+This chapter extracts those use cases from the scattered duplication and creates clear entry points to your application.
 
 ## What Is a Use Case?
 
@@ -691,6 +768,68 @@ That's what the next chapter is for.
 We've built the domain. We've built the application layer. Now we need to connect them to the real world without breaking the dependency rule.
 
 We need ports.
+
+## When You Don't Need Use Cases
+
+Use cases add structure. They centralize orchestration. They create clear entry points. But they also add files, abstraction, and overhead. Before you extract every workflow into a use case, ask: do you need them?
+
+**You don't need explicit use cases if:**
+
+- Your application has only one or two operations (e.g., a simple webhook handler)
+- The operations are trivial (basic CRUD with no orchestration)
+- You have no code duplication between entry points
+- There's only one way to trigger each operation (e.g., only a REST API, no admin panel or CLI)
+- The workflow is a single domain method call with no coordination
+- You're building a prototype and the workflows might change completely
+- Your team is small and everyone understands the entire codebase
+
+In these cases, **calling domain methods directly from your interface layer is fine:**
+
+```python
+# Simple enough to not need a use case
+@app.route('/members', methods=['POST'])
+def create_member():
+    data = request.json
+    member = Member(
+        member_id=generate_id(),
+        name=data['name'],
+        email=EmailAddress(data['email']),
+        membership_type=MembershipType('basic', 5, 10.0)
+    )
+    member_repo.save(member)
+    return jsonify({'id': member.id}), 201
+```
+
+No orchestration. No multiple steps. No duplication risk. A use case would just be a wrapper with no value.
+
+**You DO need use cases when you see these signals:**
+
+- The same workflow appears in multiple places (API, admin panel, CLI, background job)
+- Operations require multiple steps that must happen together
+- You need transaction-like behavior (all succeed or all fail)
+- There's orchestration logic beyond a single domain method
+- Testing requires understanding the entire interface layer
+- Business workflows are hard to find in the codebase
+- You're about to copy-paste orchestration code
+
+These signals indicate that orchestration needs a home. Use cases provide it.
+
+**Common mistake:** Creating a use case for every single database operation.
+
+```python
+# Don't do this - overkill
+class GetMemberByIdUseCase:
+    def execute(self, member_id: str) -> Member:
+        return self.member_repository.get_by_id(member_id)
+```
+
+This is just a pass-through. It adds a file with no value. If you're only loading an object, call the repository directly. Use cases are for **workflows**, not simple queries.
+
+**The right approach:** Start without use cases. Call domain and repository methods directly from your interface layer. When you notice duplication or complex orchestration, extract a use case. Let the need emerge from real pain, not from following a pattern blindly.
+
+We created `BookClassUseCase` because the booking workflow was duplicated across API, admin panel, and waitlist processing. That duplication was the signal. If we only had one way to book classes, we might not need the use case yet.
+
+Architecture responds to reality. Start simple. Extract when it hurts.
 
 ## Summary
 
