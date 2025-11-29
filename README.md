@@ -1,6 +1,6 @@
 # Intentional Architecture in Python
 
-Your scripts became a system you're afraid to touch. Learn architecture by building a complete Python application from domain to database. Master DDD, layered design, and hexagonal patterns through real development. Practical decisions over dogma.
+Learn architecture by building a complete Python application from domain to database. Master DDD, layered design, and hexagonal patterns through real development. Practical decisions over dogma.
 
 <p align="center">
   <img src="cover.png" alt="book cover - intentional architecture in python" width="300">
@@ -13,14 +13,17 @@ Your scripts became a system you're afraid to touch. Learn architecture by build
 ## Contents
 
 * [Introduction](book/0-introduction.md)
-* [Philosophy](book/1-philosophy.md)
-* [SOLID](book/2-solid.md)
-* [Layers](book/3-layers.md)
-* [Entities](book/4-entities.md)
-* [Aggregates](book/5-aggregates.md)
-* [Use Cases](book/6-use-cases.md)
-* [Ports](book/7-ports.md)
-* [Adapters](book/8-adapters.md)
+
+Chapters:
+
+* Chapter 1 [Philosophy](book/1-philosophy.md)
+* Chapter 2 [SOLID](book/2-solid.md)
+* Chapter 3 [Layers](book/3-layers.md)
+* Chapter 4 [Entities](book/4-entities.md)
+* Chapter 5 [Aggregates](book/5-aggregates.md)
+* Chapter 6 [Use Cases](book/6-use-cases.md)
+* Chapter 7 [Ports](book/7-ports.md)
+* Chapter 8 [Adapters](book/8-adapters.md)
 
 ## License
 
