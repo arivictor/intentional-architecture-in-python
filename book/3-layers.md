@@ -169,6 +169,8 @@ The structure guides you.
 
 The domain layer contains the core business concepts. Entities. Value objects. Business rules. Everything that makes your gym booking system a gym booking system, not a generic CRUD application.
 
+**Note:** "Domain" refers to the business problem (gym booking). "Domain layer" refers to the architectural layer (the `domain/` directory). "Domain model" refers to the code that represents the business (entities, value objects, services).
+
 From Chapter 2, we had a `Member` class. That's a domain concept. Members exist whether we have a database or not. They're part of the business.
 
 Here's `domain/member.py`:
@@ -237,7 +239,7 @@ This is your domain layer. Pure business logic. No technical dependencies. If yo
 
 The application layer orchestrates domain objects to fulfil use cases. It's the conductor. The domain provides the instruments, and the application plays the music.
 
-From Chapter 2, we had a `BookingService`. It coordinated bookings. That's application-level concern—not business logic, but use case execution.
+From Chapter 2, we had a `BookingService`. It coordinated bookings. That's application-level concern—not business logic, but executing a use case.
 
 Here's `application/booking_service.py`:
 
@@ -305,7 +307,7 @@ class FakeNotificationService(NotificationService):
         self.sent.append((member, fitness_class))
 ```
 
-This infrastructure code doesn't import from domain or application in this simple example. When infrastructure implements domain-defined interfaces (like repositories), it imports only those abstractions—never concrete domain entities or application services. It provides implementations that other layers can use.
+This infrastructure code doesn't import from domain or application in this simple example. When infrastructure implements domain-defined interfaces (like repositories), it imports only those abstractions—never concrete domain entities or use cases. It provides implementations that other layers can use.
 
 Notice the abstraction. `NotificationService` is defined here, but it could also be defined in the domain if the domain needs to express notification requirements. The key is that the concrete implementation—the SMTP details—lives in infrastructure.
 
@@ -345,7 +347,7 @@ class BookingAPI:
             capacity=class_data['capacity']
         )
         
-        # Use application service
+        # Execute the use case
         try:
             price = self.booking_service.book_class(member, fitness_class)
             return {'status': 'success', 'price': price}
@@ -355,9 +357,9 @@ class BookingAPI:
 
 The interface layer imports from every other layer. It's the outermost layer, the orchestrator of everything. See how the imports show the dependency flow: interface depends on application, infrastructure, and domain. But domain imports nothing from the other layers. Application only imports domain. The dependencies flow inward.
 
-The interface layer translates between the external world and your domain. HTTP requests come in. The interface converts them to domain objects. The application service does the work. The domain enforces the rules. The result goes back out as an HTTP response.
+The interface layer translates between the external world and your domain. HTTP requests come in. The interface converts them to domain objects. The use case does the work. The domain enforces the rules. The result goes back out as an HTTP response.
 
-This layer knows about both the external world (HTTP, JSON, request formats) and the internal world (domain objects, application services). It's the translator.
+This layer knows about both the external world (HTTP, JSON, request formats) and the internal world (domain objects, use cases). It's the translator.
 
 ## What We Gained: Before and After
 
@@ -479,11 +481,11 @@ The imports tell the story. Here's how dependencies flow through our layers:
 └──────────────────────┘
 ```
 
-Dependencies flow in one direction: inward. The domain is the centre, completely isolated. Application depends on domain. Infrastructure may import domain abstractions (interfaces, protocols) to implement them, but never imports concrete domain entities or application services. Interface depends on everything—it ties the system together.
+Dependencies flow from outer layers (Interface, Infrastructure) toward inner layers (Application, Domain). Think of it like gravity—everything depends on the core, but the core depends on nothing external. The domain is the centre, completely isolated. Application depends on domain. Infrastructure may import domain abstractions (interfaces, protocols) to implement them, but never imports concrete domain entities or use cases. Interface depends on everything—it ties the system together.
 
 When you look at a Python file, check the imports. If you see `domain/member.py` importing from `infrastructure/`, you've spotted a violation. Domain should never import from outer layers. Application should never import from interface. These boundaries are not suggestions—they're architectural constraints that keep your system flexible.
 
-You might wonder: how do we enforce this? How do we stop a developer from accidentally adding the wrong import? We'll cover that in later chapters when we introduce tools and techniques for maintaining these boundaries. For now, the key is to understand why the boundaries exist and what they protect.
+How do you enforce this? How do you stop a developer from accidentally adding the wrong import? We'll cover that in later chapters when we introduce tools and techniques for maintaining these boundaries. For now, the key is to understand why the boundaries exist and what they protect.
 
 ## Layer Violations and How to Spot Them
 
@@ -553,7 +555,7 @@ class MemberRepository:
 
 Now the domain is pure. The infrastructure handles persistence. If you change databases, you modify `MemberRepository`. The `Member` class remains untouched.
 
-Another common violation is mixing use case logic with domain logic:
+Another common violation is mixing use case orchestration with domain logic:
 
 ```python
 # DON'T DO THIS

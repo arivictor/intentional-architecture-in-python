@@ -8,7 +8,7 @@ Software architecture is not a set of patterns you apply just because.
 It’s not a diagram you draw.
 It’s the collective form your decisions take over time.
 
-Architecture is simply choosing the parts of your system that must be easy to change, and protecting them from the parts that won’t be.
+Architecture is choosing the parts of your system that must be easy to change, and protecting them from the parts that won't be. For example, pricing rules change frequently, so they live in the domain. Database choice changes rarely, so it's isolated in infrastructure.
 
 Everything around your core logic will shift. Frameworks will change. Databases will be replaced. APIs will evolve. Business priorities will absolutely change. If the heart of your system is dependent on any of these, your codebase becomes hostage to technical detail. That’s how software becomes a burden. Not through bad syntax or poor variable naming, but through uninformed decisions made early and left to solidify.
 
@@ -174,9 +174,9 @@ Different constraints demand different architectures. There is no "best" archite
 
 A solo developer doesn't need the coordination overhead of a large team. A startup doesn't need the safety mechanisms of an enterprise. A greenfield project doesn't need the compatibility layers of a legacy system.
 
-Good architecture emerges from honest assessment of the forces acting on your system. Time pressure might mean you defer certain abstractions until they're actually needed. A small team might favor simplicity over theoretical purity because maintainability matters more than perfection. A regulated industry might demand audit trails and explicit boundaries that feel like overkill elsewhere.
+Good architecture emerges from honest assessment of the forces acting on your system. Time pressure might mean you defer certain abstractions until they're needed. A small team might favor simplicity over theoretical purity because maintainability matters more than perfection. A regulated industry might demand audit trails and explicit boundaries that feel like overkill elsewhere.
 
-These constraints reveal what actually matters in your context. They force you to prioritize. They prevent you from over-engineering solutions to problems you don't have. They make you choose.
+These constraints reveal what matters in your context. They force you to prioritize. They prevent you from over-engineering solutions to problems you don't have. They make you choose.
 
 The best architects don't fight constraints. They understand them, respect them, and use them to make better decisions. Constraints clarify. They tell you what you can afford to ignore and what you absolutely must get right.
 
@@ -186,7 +186,7 @@ This is why copying what Google does rarely works. Their constraints are not you
 
 ## Essential Complexity vs. Accidental Complexity
 
-Not all complexity is equal; some of it is inherent to the problem, and some of it is self-inflicted. The job of architecture is to reduce accidental complexity so the team can focus on what actually matters.
+Not all complexity is equal; some of it is inherent to the problem, and some of it is self-inflicted. The job of architecture is to reduce accidental complexity so the team can focus on what matters.
 
 Essential complexity is the difficulty inherent to the domain itself. If you're building a tax calculation system, dealing with tax law is complex because tax law is complex. If you're scheduling appointments across time zones with availability constraints, that's genuinely hard. This complexity can't be eliminated—it's the problem you're solving.
 
@@ -232,7 +232,7 @@ def calculate_loyalty_discount(membership_type, years_active):
     return 0.0
 ```
 
-The first version mixes essential complexity (the discount rules) with accidental complexity (database connections, SQL queries, date calculations). The business rule is buried. The second version isolates what actually matters: given a membership type and tenure, what's the discount? Everything else is infrastructure, and it belongs somewhere else.
+The first version mixes essential complexity (the discount rules) with accidental complexity (database connections, SQL queries, date calculations). The business rule is buried. The second version isolates what matters: given a membership type and tenure, what's the discount? Everything else is infrastructure, and it belongs somewhere else.
 
 The essential complexity—the discount logic—hasn't changed. But now you can understand it, test it, and modify it without thinking about databases.
 

@@ -166,7 +166,7 @@ class BookingService:
         return price
 ```
 
-Now `Member` represents member data. That's it. One responsibility. If you need to add a phone number or track membership duration, you change `Member`. Nothing else.
+Now `Member` represents member data. One responsibility. If you need to add a phone number or track membership duration, you change `Member`. Nothing else.
 
 Pricing lives in `PricingService`. If pricing rules change, that's the only place you look. Booking coordination lives in `BookingService`. Notifications live elsewhere.
 
@@ -182,11 +182,24 @@ This principle feels paradoxical at first. How can something be both open and cl
 
 The goal is to add new behaviour without changing existing code. When new requirements arrive, you want to extend the system by adding new classes or modules, not by modifying working code. Modifying working code risks breaking it. Adding new code keeps the old code stable.
 
-Let's revisit pricing. The example above hardcodes membership types in an if-else chain. Every time a new membership type appears, you modify `PricingService`. That's fine for three types. But what happens when you have ten? Twenty? What if different gyms have different pricing models?
-
-Here's the violation:
+The `PricingService` we just extracted respects Single Responsibility—pricing logic lives in one place. But it violates Open/Closed. Every time a new membership type appears, you have to modify the working code. Watch what happens as requirements evolve:
 
 ```python
+class PricingService:
+    def calculate_price(self, member: Member) -> float:
+        # Initial version - three membership types
+        if member.membership_type == "premium":
+            return 0
+        elif member.membership_type == "basic":
+            return 10
+        else:
+            return 15
+
+# New requirement: add pay-per-class pricing
+# New requirement: add off-peak pricing  
+# New requirement: add student discount
+# Now the method looks like this:
+
 class PricingService:
     def calculate_price(self, member: Member) -> float:
         if member.membership_type == "premium":
@@ -199,7 +212,7 @@ class PricingService:
             return 7
         elif member.membership_type == "student":
             return 5
-        # This keeps growing...
+        # This keeps growing with every new pricing model...
 ```
 
 Every new membership type means modifying this method. The method grows. The complexity increases. You're changing working code to add new features.
@@ -362,13 +375,11 @@ Yes, we added a `can_book()` method. Yes, that's more code. But look at what we 
 
 The principle pushes you toward consistent contracts. When your subclasses honour the same interface and expectations as their parent, your code becomes more reliable. Polymorphism works the way it's supposed to.
 
-⸻
-
 ## Interface Segregation Principle
 
 **Clients should not be forced to depend on interfaces they don't use.**
 
-This principle is about keeping interfaces focused. When you define an interface or base class, don't make it a dumping ground for every possible operation. Split it into smaller, more specific interfaces so that classes only depend on what they actually need.
+This principle is about keeping interfaces focused. When you define an interface or base class, don't make it a dumping ground for every possible operation. Split it into smaller, more specific interfaces so that classes only depend on what they need.
 
 Large, monolithic interfaces force implementing classes to provide implementations for methods they don't care about. They create false dependencies and make the code harder to understand and change.
 
@@ -481,7 +492,7 @@ class PaymentService(Payable):
 
 Each class depends only on the interface it needs. No forced methods. No fake implementations. The dependencies are honest.
 
-Small interfaces are easier to implement, easier to test, and easier to understand. They keep your code focused on what actually matters.
+Small interfaces are easier to implement, easier to test, and easier to understand. They keep your code focused on what matters.
 
 ## Dependency Inversion Principle
 
@@ -592,7 +603,7 @@ This is Dependency Inversion. The high-level policy (booking) defines what it ne
 
 ## When SOLID Doesn't Matter
 
-Let's be honest about something important: you don't need SOLID everywhere.
+Here's something important: you don't need SOLID everywhere.
 
 These principles exist to manage complexity and enable change. But not all code is complex. Not all code needs to change. Sometimes you're writing a script that runs once and gets deleted. Sometimes you're prototyping an idea to see if it's worth building. Sometimes you know with certainty that a piece of code will never grow beyond its current form.
 

@@ -1,12 +1,1199 @@
-# Chapter 7: Infrastructure Implementation
+# Chapter 6: Ports and Adapters
 
-We have ports. We can't run the application yet.
+We have use cases. `BookClassUseCase` orchestrates the booking workflow. `CancelBookingUseCase` handles cancellations and refunds. They're clean. They're focused. They work.
 
-In Chapter 6, we inverted the dependencies. We created ports—abstract interfaces that define what the application needs from infrastructure. `MemberRepository` declares `get_by_id()` and `save()`. `NotificationService` declares `send_booking_confirmation()`. The use cases depend on these abstractions, not on concrete implementations.
+But try to test them.
 
-This solved the dependency problem. The application no longer knows about databases or email servers. It knows about contracts.
+```python
+def test_booking_deducts_credit():
+    # Need a real database
+    db = sqlite3.connect('test.db')
+    member_repo = SqliteMemberRepository(db)
+    class_repo = SqliteFitnessClassRepository(db)
+    booking_repo = SqliteBookingRepository(db)
+    
+    # Need a real email service (or mock it, coupling test to implementation)
+    email_service = SMTPNotificationService('localhost', 587)
+    
+    use_case = BookClassUseCase(member_repo, class_repo, booking_repo, email_service)
+    
+    # Now we can test... but we've set up a database and email server
+    # just to verify that booking deducts a credit
+```
 
-But try to run it:
+To test a simple business rule, you need infrastructure. Database. Email server. Or you need mocks, which couple your tests to implementation details.
+
+Now try to swap implementations:
+
+```python
+# Currently using SQLite
+class BookClassUseCase:
+    def __init__(self, member_repo, class_repo, booking_repo, notification):
+        # What types are these? Nowhere specified.
+        # They're concrete: SqliteMemberRepository, etc.
+        self.member_repository = member_repo
+        # ...
+```
+
+Want to switch from SQLite to PostgreSQL? You change the infrastructure, but because use cases **depend on concrete implementations**, you also have to change how you instantiate them. Want to use in-memory repositories for testing? Same problem.
+
+The dependency points the wrong way:
+
+```
+Application Layer (BookClassUseCase)
+        ↓ depends on
+Infrastructure Layer (SqliteMemberRepository, SMTPNotificationService)
+```
+
+This is backwards. High-level policy (use cases) shouldn't depend on low-level details (database choice). Infrastructure should depend on application, not the other way around.
+
+**Concrete problems this causes:**
+
+1. **Can't test without infrastructure:** Every test needs database setup and cleanup
+2. **Can't swap implementations easily:** Changing databases requires changing use cases
+3. **Can't deploy flexibly:** Want to run in AWS Lambda with DynamoDB? Use cases are coupled to SQLite
+4. **Violates dependency rule:** Application layer depends on infrastructure layer
+
+The code is asking for abstraction. Not because abstractions are "clean," but because this coupling is making change expensive.
+
+**We need ports and adapters.**
+
+A **port** is an abstraction that defines **what** the application needs from infrastructure, without specifying **how** it's provided. An **adapter** is a concrete implementation that fulfills that contract using real infrastructure.
+
+Use cases depend on ports (abstractions). Adapters implement ports (concrete infrastructure). Dependencies point inward.
+
+This chapter does three things:
+
+1. **Defines ports**—abstract interfaces that specify contracts between layers
+2. **Implements adapters**—concrete classes that connect to real infrastructure
+3. **Wires everything together**—dependency injection that assembles a working system
+
+By the end, you'll have a complete hexagonal architecture. Not just theory—a running application you can test, deploy, and extend.
+
+## What Is a Port?
+
+Remember Dependency Inversion from Chapter 2? We need abstractions so high-level code (application layer) doesn't depend on low-level code (infrastructure). 
+
+A port is that abstraction. It's an interface that defines what the application needs, without specifying how it's provided.
+
+Instead of this:
+
+```
+BookClassUseCase → PostgresMemberRepository (concrete)
+```
+
+We do this:
+
+```
+BookClassUseCase → MemberRepository (port/abstraction)
+                            ↑
+                PostgresMemberRepository (adapter)
+```
+
+The use case depends on the port. Infrastructure implements the port. Dependencies point inward.
+
+A port is an abstract interface that defines **what** the application needs from infrastructure, without specifying **how** it's provided. In Python, a port is typically an ABC (Abstract Base Class) with abstract methods.
+
+Ports define methods—the interface—but don't implement them. They declare what operations are available, not how they work.
+
+Here's a repository port for member persistence:
+
+```python
+from abc import ABC, abstractmethod
+from typing import Optional
+
+from domain.entities import Member
+
+
+class MemberRepository(ABC):
+    """
+    Repository port for member persistence.
+    
+    Defines what the application needs to load and save members,
+    without specifying how they're stored.
+    """
+    
+    @abstractmethod
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        """Retrieve a member by their ID. Returns None if not found."""
+        pass
+    
+    @abstractmethod
+    def save(self, member: Member) -> None:
+        """Persist a member. Creates new or updates existing."""
+        pass
+```
+
+Two methods: `get_by_id()` and `save()`. This is all the application needs.
+
+**Note on typing.Protocol:** If you're using Python 3.8+, you can use `typing.Protocol` instead of `ABC`. 
+
+Protocols use structural subtyping—duck typing with type checking. You don't need to explicitly inherit from the port. Any class with matching methods automatically satisfies the contract. 
+
+We use `ABC` here because it's more explicit: implementations must inherit from the port. This makes the relationship visible. But `Protocol` is equally valid. Choose based on your preference for explicit inheritance vs structural typing.
+
+Notice what's not here:
+- No database connection
+- No SQL queries
+- No ORM imports
+- No knowledge of how members are stored
+
+The port defines what, not how. It's a contract between the application and infrastructure.
+
+Now our use case can depend on this abstraction:
+
+```python
+class BookClassUseCase:
+    def __init__(self, member_repository: MemberRepository,
+                 class_repository, booking_repository, notification_service):
+        self.member_repository = member_repository
+        # ...
+```
+
+We've added a type hint: `member_repository: MemberRepository`. The use case now depends on the port, not a concrete implementation.
+
+Infrastructure will provide the implementation. But the use case doesn't know about it. Doesn't care. It just knows the contract.
+
+Dependencies inverted. Problem solved.
+
+## Defining Repository Ports
+
+Let's define all the repository ports our use cases need. Start with `MemberRepository`, which we've already seen:
+
+```python
+from abc import ABC, abstractmethod
+from typing import Optional, List
+
+from domain.entities import Member
+
+
+class MemberRepository(ABC):
+    """Repository port for member persistence."""
+    
+    @abstractmethod
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        """Retrieve a member by their ID."""
+        pass
+    
+    @abstractmethod
+    def save(self, member: Member) -> None:
+        """Persist a member."""
+        pass
+    
+    @abstractmethod
+    def find_by_email(self, email: str) -> Optional[Member]:
+        """Find a member by email address."""
+        pass
+    
+    @abstractmethod
+    def list_all(self) -> List[Member]:
+        """Retrieve all members."""
+        pass
+```
+
+We've added `find_by_email()` because user interfaces often look up members by email. We've added `list_all()` for administrative views. But these are still just contracts. No implementation.
+
+Next, `FitnessClassRepository`:
+
+```python
+from domain.entities import FitnessClass
+
+
+class FitnessClassRepository(ABC):
+    """Repository port for fitness class persistence."""
+    
+    @abstractmethod
+    def get_by_id(self, class_id: str) -> Optional[FitnessClass]:
+        """Retrieve a fitness class by ID."""
+        pass
+    
+    @abstractmethod
+    def save(self, fitness_class: FitnessClass) -> None:
+        """Persist a fitness class."""
+        pass
+    
+    @abstractmethod
+    def find_by_time_slot(self, time_slot) -> List[FitnessClass]:
+        """Find all classes scheduled in a given time slot."""
+        pass
+    
+    @abstractmethod
+    def list_all(self) -> List[FitnessClass]:
+        """Retrieve all fitness classes."""
+        pass
+```
+
+Same pattern. Load by ID. Save. Query by criteria. The application defines what it needs. Infrastructure will figure out how to provide it.
+
+Now `BookingRepository`:
+
+```python
+from domain.entities import Booking, BookingStatus
+
+
+class BookingRepository(ABC):
+    """Repository port for booking persistence."""
+    
+    @abstractmethod
+    def get_by_id(self, booking_id: str) -> Optional[Booking]:
+        """Retrieve a booking by ID."""
+        pass
+    
+    @abstractmethod
+    def save(self, booking: Booking) -> None:
+        """Persist a booking."""
+        pass
+    
+    @abstractmethod
+    def find_by_member(self, member_id: str) -> List[Booking]:
+        """Find all bookings for a specific member."""
+        pass
+    
+    @abstractmethod
+    def find_by_class(self, class_id: str) -> List[Booking]:
+        """Find all bookings for a specific class."""
+        pass
+    
+    @abstractmethod
+    def find_by_member_and_class(self, member_id: str, 
+                                  class_id: str) -> Optional[Booking]:
+        """Find a specific booking for a member in a class."""
+        pass
+    
+    @abstractmethod
+    def find_by_status(self, status: BookingStatus) -> List[Booking]:
+        """Find all bookings with a given status."""
+        pass
+```
+
+More methods because bookings are queried in more ways. By member. By class. By status. By the combination of member and class. Each method represents something the application needs to do.
+
+But still: no SQL. No database code. Just contracts.
+
+One more repository—waitlist entries:
+
+```python
+from domain.entities import WaitlistEntry
+
+
+class WaitlistRepository(ABC):
+    """Repository port for waitlist persistence."""
+    
+    @abstractmethod
+    def save(self, entry: WaitlistEntry) -> None:
+        """Add or update a waitlist entry."""
+        pass
+    
+    @abstractmethod
+    def remove(self, entry: WaitlistEntry) -> None:
+        """Remove a waitlist entry."""
+        pass
+    
+    @abstractmethod
+    def get_next_for_class(self, class_id: str) -> Optional[WaitlistEntry]:
+        """Get the next person waiting for a class."""
+        pass
+    
+    @abstractmethod
+    def find_by_member(self, member_id: str) -> List[WaitlistEntry]:
+        """Find all waitlist entries for a member."""
+        pass
+```
+
+Now we have complete repository ports for all our persistence needs.
+
+## Defining Service Ports
+
+Repositories aren't the only infrastructure concern. Use cases also need to send notifications. That's infrastructure too.
+
+Let's define a port for notifications:
+
+```python
+from abc import ABC, abstractmethod
+
+
+class NotificationService(ABC):
+    """Port for sending notifications to members."""
+    
+    @abstractmethod
+    def send_booking_confirmation(self, email: str, name: str,
+                                  class_name: str, time_slot) -> None:
+        """Send a booking confirmation to a member."""
+        pass
+    
+    @abstractmethod
+    def send_cancellation_confirmation(self, email: str, name: str,
+                                       class_name: str, time_slot) -> None:
+        """Send a cancellation confirmation to a member."""
+        pass
+    
+    @abstractmethod
+    def send_waitlist_confirmation(self, email: str, name: str,
+                                   class_name: str) -> None:
+        """Notify a member they've been added to the waitlist."""
+        pass
+    
+    @abstractmethod
+    def send_waitlist_booking_confirmation(self, email: str, name: str,
+                                          class_name: str, time_slot) -> None:
+        """Notify a member they got off the waitlist and into the class."""
+        pass
+    
+    @abstractmethod
+    def send_waitlist_insufficient_credits(self, email: str, name: str,
+                                          class_name: str) -> None:
+        """Notify a member they were skipped in the waitlist due to insufficient credits."""
+        pass
+```
+
+Each method corresponds to a notification scenario in our domain. The use cases call these methods when appropriate. But they don't know how notifications are sent. Email? SMS? Push notification? The port doesn't care.
+
+Infrastructure will implement the port. Maybe with SMTP. Maybe with SendGrid. Maybe with a message queue. The use case doesn't need to know.
+
+If you need payment processing, you'd define a `PaymentService` port:
+
+```python
+class PaymentService(ABC):
+    """Port for processing payments."""
+    
+    @abstractmethod
+    def charge_membership(self, member_id: str, amount: float) -> str:
+        """
+        Charge a member for their membership.
+        Returns a transaction ID.
+        """
+        pass
+    
+    @abstractmethod
+    def refund_booking(self, member_id: str, booking_id: str, 
+                      amount: float) -> None:
+        """Refund a member for a cancelled booking."""
+        pass
+```
+
+Same pattern. What does the application need? Charge a membership. Refund a booking. How is it done? Not the application's concern.
+
+## Where Do Ports Live?
+
+This is a practical question with architectural implications. Where in your directory structure do you put these port definitions?
+
+**Decision: We're placing ports in the application layer.**
+
+The application defines what it needs. Infrastructure provides it. Ports are contracts owned by the application. So they live with the application.
+
+Here are the two options we considered:
+
+**Option 1: Application layer**
+```
+application/
+    ports/
+        __init__.py
+        member_repository.py
+        booking_repository.py
+        notification_service.py
+    use_cases/
+        book_class.py
+        cancel_booking.py
+```
+
+Ports live with the application because the application defines its needs. This emphasises that ports belong to the application, not infrastructure.
+
+**Option 2: Dedicated ports layer**
+```
+ports/
+    __init__.py
+    repositories.py      # All repository ports
+    services.py          # All service ports
+application/
+    use_cases/
+        book_class.py
+```
+
+Ports get their own layer between application and infrastructure. This makes the boundary explicit.
+
+**We chose Option 1.** Why? It makes the ownership explicit. The application declares its requirements. Infrastructure fulfills them. Ports are the application's contracts, so they live in the application layer.
+
+Here's our structure:
+
+```
+application/
+    ports/
+        __init__.py
+        repositories.py    # MemberRepository, BookingRepository, etc.
+        services.py        # NotificationService, PaymentService
+    use_cases/
+        __init__.py
+        book_class.py
+        cancel_booking.py
+        process_waitlist.py
+    __init__.py
+```
+
+The complete `repositories.py` file:
+
+```python
+from abc import ABC, abstractmethod
+from typing import Optional, List
+
+from domain.entities import Member, FitnessClass, Booking, BookingStatus, WaitlistEntry
+
+
+class MemberRepository(ABC):
+    """Repository port for member persistence."""
+    
+    @abstractmethod
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        pass
+    
+    @abstractmethod
+    def save(self, member: Member) -> None:
+        pass
+    
+    @abstractmethod
+    def find_by_email(self, email: str) -> Optional[Member]:
+        pass
+    
+    @abstractmethod
+    def list_all(self) -> List[Member]:
+        pass
+
+
+class FitnessClassRepository(ABC):
+    """Repository port for fitness class persistence."""
+    
+    @abstractmethod
+    def get_by_id(self, class_id: str) -> Optional[FitnessClass]:
+        pass
+    
+    @abstractmethod
+    def save(self, fitness_class: FitnessClass) -> None:
+        pass
+    
+    @abstractmethod
+    def find_by_time_slot(self, time_slot) -> List[FitnessClass]:
+        pass
+    
+    @abstractmethod
+    def list_all(self) -> List[FitnessClass]:
+        pass
+
+
+class BookingRepository(ABC):
+    """Repository port for booking persistence."""
+    
+    @abstractmethod
+    def get_by_id(self, booking_id: str) -> Optional[Booking]:
+        pass
+    
+    @abstractmethod
+    def save(self, booking: Booking) -> None:
+        pass
+    
+    @abstractmethod
+    def find_by_member(self, member_id: str) -> List[Booking]:
+        pass
+    
+    @abstractmethod
+    def find_by_class(self, class_id: str) -> List[Booking]:
+        pass
+    
+    @abstractmethod
+    def find_by_member_and_class(self, member_id: str, 
+                                  class_id: str) -> Optional[Booking]:
+        pass
+    
+    @abstractmethod
+    def find_by_status(self, status: BookingStatus) -> List[Booking]:
+        pass
+
+
+class WaitlistRepository(ABC):
+    """Repository port for waitlist persistence."""
+    
+    @abstractmethod
+    def save(self, entry: WaitlistEntry) -> None:
+        pass
+    
+    @abstractmethod
+    def remove(self, entry: WaitlistEntry) -> None:
+        pass
+    
+    @abstractmethod
+    def get_next_for_class(self, class_id: str) -> Optional[WaitlistEntry]:
+        pass
+    
+    @abstractmethod
+    def find_by_member(self, member_id: str) -> List[WaitlistEntry]:
+        pass
+```
+
+And the complete `services.py`:
+
+```python
+from abc import ABC, abstractmethod
+
+
+class NotificationService(ABC):
+    """Port for sending notifications to members."""
+    
+    @abstractmethod
+    def send_booking_confirmation(self, email: str, name: str,
+                                  class_name: str, time_slot) -> None:
+        pass
+    
+    @abstractmethod
+    def send_cancellation_confirmation(self, email: str, name: str,
+                                       class_name: str, time_slot) -> None:
+        pass
+    
+    @abstractmethod
+    def send_waitlist_confirmation(self, email: str, name: str,
+                                   class_name: str) -> None:
+        pass
+    
+    @abstractmethod
+    def send_waitlist_booking_confirmation(self, email: str, name: str,
+                                          class_name: str, time_slot) -> None:
+        pass
+    
+    @abstractmethod
+    def send_waitlist_insufficient_credits(self, email: str, name: str,
+                                          class_name: str) -> None:
+        pass
+```
+
+Clean. Organised. All the contracts in one place.
+
+## Refactoring Use Cases to Depend on Ports
+
+Now we update our use cases to depend on these ports instead of concrete implementations.
+
+Here's `BookClassUseCase` refactored:
+
+```python
+from typing import Optional
+
+from domain.entities import Member, FitnessClass, Booking, BookingStatus
+from domain.exceptions import ClassFullException, InsufficientCreditsException
+from application.ports.repositories import (
+    MemberRepository, 
+    FitnessClassRepository, 
+    BookingRepository
+)
+from application.ports.services import NotificationService
+
+
+def generate_id() -> str:
+    """Generate a unique ID for domain entities."""
+    from uuid import uuid4
+    return str(uuid4())
+
+
+class BookClassUseCase:
+    def __init__(self, 
+                 member_repository: MemberRepository,
+                 class_repository: FitnessClassRepository,
+                 booking_repository: BookingRepository,
+                 notification_service: NotificationService):
+        self.member_repository = member_repository
+        self.class_repository = class_repository
+        self.booking_repository = booking_repository
+        self.notification_service = notification_service
+    
+    def execute(self, member_id: str, class_id: str) -> Booking:
+        """
+        Book a member into a fitness class.
+        
+        Raises:
+            ValueError: If member or class not found
+            InsufficientCreditsException: If member has no credits
+            ClassFullException: If class is at capacity
+        """
+        # 1. Load domain objects
+        member = self.member_repository.get_by_id(member_id)
+        if not member:
+            raise ValueError(f"Member {member_id} not found")
+        
+        fitness_class = self.class_repository.get_by_id(class_id)
+        if not fitness_class:
+            raise ValueError(f"Class {class_id} not found")
+        
+        # 2. Check for existing booking
+        existing_booking = self.booking_repository.find_by_member_and_class(
+            member_id, class_id
+        )
+        if existing_booking and existing_booking.status == BookingStatus.CONFIRMED:
+            raise ValueError("Member already booked in this class")
+        
+        # 3. Let the domain enforce business rules
+        member.deduct_credit()
+        fitness_class.add_booking(member_id)
+        
+        # 4. Create the booking aggregate
+        booking = Booking(generate_id(), member_id, class_id)
+        
+        # 5. Persist all changes
+        self.member_repository.save(member)
+        self.class_repository.save(fitness_class)
+        self.booking_repository.save(booking)
+        
+        # 6. Send confirmation
+        self.notification_service.send_booking_confirmation(
+            member.email.value,
+            member.name,
+            fitness_class.name,
+            fitness_class.time_slot
+        )
+        
+        return booking
+```
+
+Look at the changes. The constructor now has type hints: `member_repository: MemberRepository`. These are the port types, not concrete implementations.
+
+The imports changed. We import from `application.ports.repositories` and `application.ports.services`, not from infrastructure.
+
+The logic is identical. The orchestration hasn't changed. But the dependencies have. The use case depends on abstractions, not concretions.
+
+`CancelBookingUseCase` gets the same treatment:
+
+```python
+from datetime import datetime, timedelta
+
+from domain.entities import Booking, BookingStatus
+from domain.exceptions import BookingNotCancellableException
+from application.ports.repositories import (
+    BookingRepository,
+    MemberRepository,
+    FitnessClassRepository
+)
+from application.ports.services import NotificationService
+
+
+class CancelBookingUseCase:
+    def __init__(self, 
+                 booking_repository: BookingRepository,
+                 member_repository: MemberRepository,
+                 class_repository: FitnessClassRepository,
+                 notification_service: NotificationService):
+        self.booking_repository = booking_repository
+        self.member_repository = member_repository
+        self.class_repository = class_repository
+        self.notification_service = notification_service
+    
+    def execute(self, booking_id: str) -> None:
+        """
+        Cancel a booking and refund the member's credit.
+        
+        Raises:
+            ValueError: If booking not found
+            BookingNotCancellableException: If booking cannot be cancelled
+        """
+        # 1. Load the booking
+        booking = self.booking_repository.get_by_id(booking_id)
+        if not booking:
+            raise ValueError(f"Booking {booking_id} not found")
+        
+        # 2. Load the class to check the schedule
+        fitness_class = self.class_repository.get_by_id(booking.class_id)
+        if not fitness_class:
+            raise ValueError(f"Class {booking.class_id} not found")
+        
+        # 3. Calculate class start time
+        class_start_time = self._get_next_class_occurrence(fitness_class.time_slot)
+        
+        # 4. Let the domain enforce cancellation rules
+        booking.cancel(class_start_time)
+        
+        # 5. Load the member and refund the credit
+        member = self.member_repository.get_by_id(booking.member_id)
+        if member:
+            member.add_credits(1, expiry_days=30)
+            self.member_repository.save(member)
+        
+        # 6. Remove member from the class
+        fitness_class.remove_booking(booking.member_id)
+        
+        # 7. Persist changes
+        self.booking_repository.save(booking)
+        self.class_repository.save(fitness_class)
+        
+        # 8. Notify the member
+        if member:
+            self.notification_service.send_cancellation_confirmation(
+                member.email.value,
+                member.name,
+                fitness_class.name,
+                fitness_class.time_slot
+            )
+    
+    def _get_next_class_occurrence(self, time_slot) -> datetime:
+        """Find the next occurrence of this time slot."""
+        now = datetime.now()
+        current_day = now.weekday() + 1
+        target_day = time_slot.day.value
+        days_ahead = (target_day - current_day) % 7
+        
+        if days_ahead == 0:
+            days_ahead = 7
+        
+        next_date = now + timedelta(days=days_ahead)
+        return datetime.combine(next_date.date(), time_slot.start_time)
+```
+
+And `ProcessWaitlistUseCase`:
+
+```python
+from typing import Optional
+from uuid import uuid4
+
+from domain.entities import Booking
+from domain.exceptions import InsufficientCreditsException, ClassFullException
+from application.ports.repositories import (
+    WaitlistRepository,
+    MemberRepository,
+    FitnessClassRepository,
+    BookingRepository
+)
+from application.ports.services import NotificationService
+
+
+def generate_id() -> str:
+    """Generate a unique ID for domain entities."""
+    return str(uuid4())
+
+
+class ProcessWaitlistUseCase:
+    def __init__(self,
+                 waitlist_repository: WaitlistRepository,
+                 member_repository: MemberRepository,
+                 class_repository: FitnessClassRepository,
+                 booking_repository: BookingRepository,
+                 notification_service: NotificationService):
+        self.waitlist_repository = waitlist_repository
+        self.member_repository = member_repository
+        self.class_repository = class_repository
+        self.booking_repository = booking_repository
+        self.notification_service = notification_service
+    
+    def execute(self, class_id: str) -> Optional[Booking]:
+        """Process the waitlist for a class when a spot becomes available."""
+        # 1. Load the class
+        fitness_class = self.class_repository.get_by_id(class_id)
+        if not fitness_class:
+            raise ValueError(f"Class {class_id} not found")
+        
+        # 2. Check if there's space
+        if fitness_class.is_full():
+            return None
+        
+        # 3. Get the next person on the waitlist
+        next_in_line = self.waitlist_repository.get_next_for_class(class_id)
+        if not next_in_line:
+            return None
+        
+        # 4. Load the member
+        member = self.member_repository.get_by_id(next_in_line.member_id)
+        if not member:
+            self.waitlist_repository.remove(next_in_line)
+            return self.execute(class_id)
+        
+        # 5. Check if member still has credits
+        try:
+            member.deduct_credit()
+        except InsufficientCreditsException:
+            self.waitlist_repository.remove(next_in_line)
+            self.notification_service.send_waitlist_insufficient_credits(
+                member.email.value,
+                member.name,
+                fitness_class.name
+            )
+            return self.execute(class_id)
+        
+        # 6. Book the member into the class
+        try:
+            fitness_class.add_booking(next_in_line.member_id)
+        except ClassFullException:
+            member.add_credits(1, expiry_days=30)
+            self.member_repository.save(member)
+            return None
+        
+        # 7. Create the booking
+        booking = Booking(generate_id(), next_in_line.member_id, class_id)
+        
+        # 8. Remove from waitlist
+        self.waitlist_repository.remove(next_in_line)
+        
+        # 9. Persist everything
+        self.member_repository.save(member)
+        self.class_repository.save(fitness_class)
+        self.booking_repository.save(booking)
+        
+        # 10. Notify the member
+        self.notification_service.send_waitlist_booking_confirmation(
+            member.email.value,
+            member.name,
+            fitness_class.name,
+            fitness_class.time_slot
+        )
+        
+        return booking
+```
+
+All three use cases now depend exclusively on ports. They import from `application.ports`, not from infrastructure. The dependencies point inward.
+
+## Testing with Ports
+
+Here's where ports prove their value. You can now test use cases without infrastructure.
+
+Create a fake repository that implements the port:
+
+```python
+from typing import Dict, Optional, List
+
+from domain.entities import Member
+from application.ports.repositories import MemberRepository
+
+
+class InMemoryMemberRepository(MemberRepository):
+    """In-memory repository adapter for testing."""
+    
+    def __init__(self):
+        self._members: Dict[str, Member] = {}
+    
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        return self._members.get(member_id)
+    
+    def save(self, member: Member) -> None:
+        self._members[member.id] = member
+    
+    def find_by_email(self, email: str) -> Optional[Member]:
+        for member in self._members.values():
+            if member.email.value == email:
+                return member
+        return None
+    
+    def list_all(self) -> List[Member]:
+        return list(self._members.values())
+```
+
+It implements the port. It stores members in a dictionary. No database. No network. Just pure Python.
+
+Do the same for other ports (showing key methods, with similar implementations for remaining port methods):
+
+```python
+class InMemoryBookingRepository(BookingRepository):
+    def __init__(self):
+        self._bookings: Dict[str, Booking] = {}
+    
+    def get_by_id(self, booking_id: str) -> Optional[Booking]:
+        return self._bookings.get(booking_id)
+    
+    def save(self, booking: Booking) -> None:
+        self._bookings[booking.id] = booking
+    
+    def find_by_member_and_class(self, member_id: str, 
+                                  class_id: str) -> Optional[Booking]:
+        for booking in self._bookings.values():
+            if (booking.member_id == member_id and 
+                booking.class_id == class_id):
+                return booking
+        return None
+    
+    def find_by_member(self, member_id: str) -> List[Booking]:
+        return [b for b in self._bookings.values() if b.member_id == member_id]
+    
+    def find_by_class(self, class_id: str) -> List[Booking]:
+        return [b for b in self._bookings.values() if b.class_id == class_id]
+    
+    def find_by_status(self, status: BookingStatus) -> List[Booking]:
+        return [b for b in self._bookings.values() if b.status == status]
+
+
+class InMemoryFitnessClassRepository(FitnessClassRepository):
+    """Fake fitness class repository for testing."""
+    
+    def __init__(self):
+        self._classes: Dict[str, FitnessClass] = {}
+    
+    def get_by_id(self, class_id: str) -> Optional[FitnessClass]:
+        return self._classes.get(class_id)
+    
+    def save(self, fitness_class: FitnessClass) -> None:
+        self._classes[fitness_class.id] = fitness_class
+    
+    def find_by_time_slot(self, time_slot) -> List[FitnessClass]:
+        result = []
+        for cls in self._classes.values():
+            if cls.time_slot == time_slot:
+                result.append(cls)
+        return result
+    
+    def list_all(self) -> List[FitnessClass]:
+        return list(self._classes.values())
+
+
+class FakeNotificationService(NotificationService):
+    """Fake notification service that records calls instead of sending emails."""
+    
+    def __init__(self):
+        self.sent_notifications = []
+    
+    def send_booking_confirmation(self, email: str, name: str,
+                                  class_name: str, time_slot) -> None:
+        self.sent_notifications.append({
+            'type': 'booking_confirmation',
+            'email': email,
+            'name': name,
+            'class_name': class_name
+        })
+    
+    def send_cancellation_confirmation(self, email: str, name: str,
+                                       class_name: str, time_slot) -> None:
+        self.sent_notifications.append({
+            'type': 'cancellation_confirmation',
+            'email': email,
+            'name': name,
+            'class_name': class_name
+        })
+    
+    def send_waitlist_confirmation(self, email: str, name: str,
+                                   class_name: str) -> None:
+        self.sent_notifications.append({
+            'type': 'waitlist_confirmation',
+            'email': email,
+            'name': name,
+            'class_name': class_name
+        })
+    
+    def send_waitlist_booking_confirmation(self, email: str, name: str,
+                                          class_name: str, time_slot) -> None:
+        self.sent_notifications.append({
+            'type': 'waitlist_booking_confirmation',
+            'email': email,
+            'name': name,
+            'class_name': class_name
+        })
+    
+    def send_waitlist_insufficient_credits(self, email: str, name: str,
+                                          class_name: str) -> None:
+        self.sent_notifications.append({
+            'type': 'waitlist_insufficient_credits',
+            'email': email,
+            'name': name,
+            'class_name': class_name
+        })
+```
+
+Now write tests:
+
+```python
+import pytest
+from datetime import time
+
+from domain.entities import Member, FitnessClass, BookingStatus
+from domain.value_objects import EmailAddress, MembershipType, ClassCapacity, TimeSlot, DayOfWeek
+from domain.exceptions import ClassFullException, InsufficientCreditsException
+from application.use_cases.book_class import BookClassUseCase
+
+
+def test_booking_a_class_successfully():
+    # Arrange: Create fake repositories
+    member_repo = InMemoryMemberRepository()
+    class_repo = InMemoryFitnessClassRepository()
+    booking_repo = InMemoryBookingRepository()
+    notification = FakeNotificationService()
+    
+    # Create test data
+    email = EmailAddress("sarah@example.com")
+    membership = MembershipType("Premium", credits_per_month=10, price=50)
+    member = Member("M001", "Sarah", email, membership)
+    
+    capacity = ClassCapacity(15)
+    time_slot = TimeSlot(DayOfWeek.MONDAY, time(10, 0), time(11, 0))
+    yoga_class = FitnessClass("C001", "Yoga", capacity, time_slot)
+    
+    member_repo.save(member)
+    class_repo.save(yoga_class)
+    
+    # Act: Execute the use case
+    use_case = BookClassUseCase(member_repo, class_repo, booking_repo, notification)
+    booking = use_case.execute("M001", "C001")
+    
+    # Assert: Verify the outcome
+    assert booking is not None
+    assert booking.member_id == "M001"
+    assert booking.class_id == "C001"
+    assert booking.status == BookingStatus.CONFIRMED
+    
+    # Verify member credits were deducted
+    updated_member = member_repo.get_by_id("M001")
+    assert updated_member.credits == 9
+    
+    # Verify class has the booking
+    updated_class = class_repo.get_by_id("C001")
+    assert updated_class.booking_count() == 1
+    
+    # Verify notification was sent
+    assert len(notification.sent_notifications) == 1
+    assert notification.sent_notifications[0]['type'] == 'booking_confirmation'
+
+
+def test_booking_fails_when_class_is_full():
+    # Arrange
+    member_repo = InMemoryMemberRepository()
+    class_repo = InMemoryFitnessClassRepository()
+    booking_repo = InMemoryBookingRepository()
+    notification = FakeNotificationService()
+    
+    # Create a class with capacity of 1
+    capacity = ClassCapacity(1)
+    time_slot = TimeSlot(DayOfWeek.MONDAY, time(10, 0), time(11, 0))
+    yoga_class = FitnessClass("C001", "Yoga", capacity, time_slot)
+    yoga_class.add_booking("OTHER_MEMBER")  # Fill the class
+    class_repo.save(yoga_class)
+    
+    # Create a member
+    email = EmailAddress("sarah@example.com")
+    membership = MembershipType("Premium", credits_per_month=10, price=50)
+    member = Member("M001", "Sarah", email, membership)
+    member_repo.save(member)
+    
+    # Act & Assert
+    use_case = BookClassUseCase(member_repo, class_repo, booking_repo, notification)
+    with pytest.raises(ClassFullException):
+        use_case.execute("M001", "C001")
+```
+
+No database. No email server. Just pure unit tests that run in milliseconds.
+
+The tests verify business logic. The fake repositories implement the ports. The use case doesn't know the difference.
+
+This is the power of depending on abstractions.
+
+## The Hexagonal Architecture Emerges
+
+What we've built is the core of hexagonal architecture—also called ports and adapters.
+
+The structure looks like this:
+
+```
+        ┌─────────────────────────┐
+        │   Application Layer     │
+        │   (Use Cases)           │
+        └───────┬─────────────────┘
+                │ depends on
+        ┌───────▼─────────────────┐
+        │   Ports                 │
+        │   (Abstractions)        │
+        └───────▲─────────────────┘
+                │ implemented by
+        ┌───────┴─────────────────┐
+        │   Infrastructure Layer  │
+        │   (Adapters)            │
+        └─────────────────────────┘
+```
+
+The application defines ports. Infrastructure implements them. Dependencies point inward.
+
+The application is the hexagon—the core business logic. Ports are the edges—the interfaces. Adapters plug into ports from the outside.
+
+You can have multiple adapters for the same port:
+- `PostgresMemberRepository` for production
+- `InMemoryMemberRepository` for tests
+- `MongoMemberRepository` for a different deployment
+
+The use cases don't change. They depend on `MemberRepository`, the port. Which adapter is connected is decided at runtime, outside the application.
+
+This is dependency injection. The application declares what it needs. Something external provides it.
+
+## What We Can't Do Yet
+
+Our application is well-structured. Use cases depend on ports. Ports define clean contracts. Dependencies point inward. But we can't run it. The ports are abstract base classes—you can't instantiate `MemberRepository()` or `NotificationService()`. We've defined the contracts. We haven't fulfilled them.
+
+This is deliberate. The architecture forces us to provide real implementations. We can't skip infrastructure. We need concrete adapters that implement these ports using actual databases, email services, and APIs. That's what we're going to build in the next section.
+
+## When You Don't Need Ports
+
+Ports add indirection. They add files. They add abstraction. Before you define ports for everything, ask: do you need them?
+
+**You don't need ports if:**
+
+- You have a single, stable infrastructure that will never change (e.g., a company-mandated database)
+- Your application is small and simple (< 500 lines, a few operations)
+- You're building a proof-of-concept that might be thrown away
+- The infrastructure IS your application (e.g., a database migration script)
+- You only have one implementation and no plans for alternatives
+- Testing with real infrastructure is fast and easy
+- Your team is unfamiliar with abstraction and the learning curve is too steep
+
+In these cases, **depending directly on concrete infrastructure is fine:**
+
+```python
+# No port needed - just use the repository directly
+from infrastructure.sqlite_member_repository import SqliteMemberRepository
+
+class BookClassUseCase:
+    def __init__(self):
+        self.member_repo = SqliteMemberRepository('gym.db')
+    
+    def execute(self, member_id: str, class_id: str):
+        member = self.member_repo.get_by_id(member_id)
+        # ...
+```
+
+Simple. Direct. No abstraction overhead. If you're never swapping SQLite for PostgreSQL, why abstract it?
+
+**You DO need ports when you see these signals:**
+
+- You want to test use cases without infrastructure setup
+- You need to support multiple implementations (SQLite for dev, PostgreSQL for prod)
+- Infrastructure is slow and makes tests painful
+- You might migrate databases or services in the future
+- You're deploying to different environments with different infrastructure
+- Use cases are hard to test because of infrastructure coupling
+- You're building a library or framework that others will integrate with different backends
+
+These signals indicate that coupling to concrete infrastructure is causing pain.
+
+**Common misconception:** "Ports are always better because they're more flexible."
+
+Not true. Flexibility has a cost. More files. More indirection. More concepts to understand. If you don't need the flexibility, you're paying for nothing.
+
+**The right approach:** Start without ports. Depend directly on concrete implementations. When you feel the pain of coupling (hard to test, hard to swap, hard to deploy), introduce ports. Let the need emerge from real problems, not theoretical ones.
+
+We created ports for `MemberRepository` and `NotificationService` because we demonstrated concrete pain: couldn't test without database, couldn't swap implementations, violated dependency rule. If we only ever used SQLite and never tested, we might not need the abstraction yet.
+
+**One exception:** If you're building a system that will definitely need multiple implementations (documented requirement, not speculation), start with ports. But be honest about "definitely."
+
+Architecture responds to reality. Start simple. Abstract when it hurts.
+
+## Ports: A Checkpoint
+
+We've completed the first half of this chapter. Let's recap what we've built before moving on to adapters.
+
+Use cases need infrastructure. But depending on infrastructure violates the dependency rule.
+
+The solution is ports—abstractions that define what the application needs without specifying how it's provided. Ports are contracts expressed as abstract base classes or protocols.
+
+We defined repository ports for persistence: `MemberRepository`, `FitnessClassRepository`, `BookingRepository`, `WaitlistRepository`. Each port declares the methods the application needs—load, save, query—without implementation.
+
+We defined service ports for external concerns: `NotificationService` for sending emails, `PaymentService` for processing payments. Again, just contracts.
+
+We refactored our use cases from earlier in this chapter to depend on these ports. The constructors now accept `MemberRepository`, not concrete implementations. The imports changed from infrastructure to ports. But the logic stayed the same.
+
+This inverts dependencies. High-level policy (use cases) no longer depends on low-level details (databases, email). Both depend on abstractions (ports).
+
+Testing became trivial. We created fake implementations—`InMemoryMemberRepository`, `FakeNotificationService`—that fulfill the port contracts without real infrastructure. Tests run fast. Tests run independently. Tests verify business logic.
+
+The structure we built is hexagonal architecture. Application at the center. Ports at the edges. Infrastructure outside, plugging in through adapters.
+
+But we can't run the application yet. The ports have no implementations. We've defined the contracts. We haven't fulfilled them.
+
+The dependencies are inverted. The use cases depend on abstractions, not concrete implementations. This solves the testing problem and the flexibility problem.
+
+But it creates a new problem: we can't run the application.
+
+Try to create a use case:
 
 ```python
 # Try to create a use case
@@ -22,15 +1209,19 @@ Abstract classes can't be instantiated. Ports have no behaviour. They're interfa
 
 **We can't run the application.** We can't execute a booking. We can't save data. We can't send notifications. The architecture is beautiful, but it does nothing.
 
-This is the gap between design and reality. Ports define the contract. Now we need adapters to fulfill it.
+This is the gap between design and reality. Ports define the contract. Adapters fulfill it.
 
-**This chapter makes the system real.** We're going to implement adapters—concrete classes that plug into our ports and connect the application to actual infrastructure. SQLite databases. JSON files. In-memory dictionaries. SMTP email servers. Everything the application needs to actually work.
-
-By the end, you'll have a complete, running system. Not just architecture diagrams. Not just abstractions. A system you can execute, test, and deploy.
+**The second half of this chapter makes the system real.** We're going to implement adapters—concrete classes that plug into our ports and connect the application to infrastructure. SQLite databases. JSON files. SMTP email servers. Everything the application needs to work.
 
 From abstract to concrete. From design to implementation. Let's build the adapters.
 
-## What Is an Adapter?
+## Implementing Adapters
+
+We've completed the first part of this chapter: defining ports and inverting dependencies. Now for the second part: building the concrete implementations that make the system work.
+
+We've established the contracts—now we need to fulfill them. This is where **adapters** come in.
+
+### What Is an Adapter?
 
 An adapter is a concrete implementation of a port that translates between the application and infrastructure.
 
@@ -41,7 +1232,7 @@ The adapter bridges the gap. It implements the port's contract using infrastruct
 Here's what that looks like for `MemberRepository`:
 
 ```python
-# The port (from Chapter 7)
+# The port (defined earlier in this chapter)
 class MemberRepository(ABC):
     @abstractmethod
     def get_by_id(self, member_id: str) -> Optional[Member]:
@@ -51,7 +1242,7 @@ class MemberRepository(ABC):
     def save(self, member: Member) -> None:
         pass
 
-# The adapter (this chapter)
+# The adapter (concrete implementation)
 class SqliteMemberRepository(MemberRepository):
     def __init__(self, db_path: str):
         self.db_path = db_path
@@ -71,19 +1262,19 @@ The adapter inherits from the port. It implements the abstract methods. It knows
 
 This is the adapter pattern. The port defines the interface the application expects. The adapter implements it using infrastructure the application knows nothing about.
 
-## Building Repository Adapters
+### Building Repository Adapters
 
 The beauty of ports and adapters is swappability. The application depends on `MemberRepository`, an abstraction. We can implement that abstraction with any persistence mechanism we want. SQLite. JSON files. In-memory dictionaries. PostgreSQL. The application doesn't care.
 
-To demonstrate this, we'll implement the same repository port three different ways:
+To demonstrate this, we'll build three different repository adapters for the same port:
 
-1. **In-memory**: Simple dictionaries. Perfect for testing.
-2. **JSON file**: Persistent but simple. No external dependencies.
-3. **SQLite**: Real database using Python's standard library.
+1. **In-memory repository adapter**: Simple dictionaries. Perfect for testing.
+2. **JSON file repository adapter**: Persistent but simple. No external dependencies.
+3. **SQLite repository adapter**: Real database using Python's standard library.
 
-Same port. Same contract. Three different infrastructures. This is the power of the adapter pattern.
+Same repository port. Same contract. Three different adapter implementations. This is the power of the adapter pattern.
 
-### Implementation 1: In-Memory Repository
+#### Implementation 1: In-Memory Repository
 
 Let's start with the simplest adapter—an in-memory dictionary:
 
@@ -97,7 +1288,7 @@ from application.ports.repositories import MemberRepository
 
 class InMemoryMemberRepository(MemberRepository):
     """
-    In-memory implementation of MemberRepository.
+    In-memory repository adapter for MemberRepository port.
     
     Stores members in a dictionary. Fast and simple.
     Perfect for testing. Data doesn't persist across restarts.
@@ -126,11 +1317,11 @@ class InMemoryMemberRepository(MemberRepository):
         return list(self._members.values())
 ```
 
-That's it. No database. No SQL. No ORM. Just a Python dictionary. The adapter implements the port's interface using whatever infrastructure makes sense.
+No database. No SQL. No ORM. Just a Python dictionary. The adapter implements the port's interface using whatever infrastructure makes sense.
 
 The use cases don't know. They call `repository.save(member)`. They don't know if it's going to a dictionary, a file, or a database. They don't care.
 
-### Implementation 2: JSON File Repository
+#### Implementation 2: JSON File Repository
 
 Now let's persist to disk using JSON files:
 
@@ -147,7 +1338,7 @@ from application.ports.repositories import MemberRepository
 
 class JsonMemberRepository(MemberRepository):
     """
-    JSON file implementation of MemberRepository.
+    JSON file repository adapter for MemberRepository port.
     
     Stores members as JSON in a file. Simple persistence.
     No external dependencies—just Python's standard library.
@@ -242,7 +1433,7 @@ More infrastructure, same interface. The adapter handles file I/O. It serializes
 
 Notice the translation methods: `_to_domain()` and `_to_dict()`. They're the bridge between domain objects and JSON data. Every adapter needs translation logic. The specifics depend on the infrastructure.
 
-### Implementation 3: SQLite Repository
+#### Implementation 3: SQLite Repository
 
 Now let's use a real database with Python's built-in `sqlite3` module:
 
@@ -258,10 +1449,10 @@ from application.ports.repositories import MemberRepository
 
 class SqliteMemberRepository(MemberRepository):
     """
-    SQLite implementation of MemberRepository.
+    SQLite repository adapter for MemberRepository port.
     
     Uses Python's built-in sqlite3 module. No external dependencies.
-    Provides real database persistence with SQL transactions.
+    Suitable for development and small-to-medium production deployments.
     """
     
     def __init__(self, db_path: str):
@@ -424,7 +1615,7 @@ Look at the pattern:
 
 The application doesn't know which implementation it's using. It just knows `MemberRepository`.
 
-### The Power of Swappability
+#### The Power of Swappability
 
 Here's the remarkable thing. This code:
 
@@ -461,7 +1652,7 @@ You can start with in-memory for development. Switch to JSON when you need persi
 
 This is why we inverted the dependencies.
 
-## Implementing Service Adapters
+### Implementing Service Adapters
 
 Repositories aren't the only infrastructure concern. We also need service adapters for notifications, payments, and external APIs.
 
@@ -664,9 +1855,20 @@ Same port. Different adapter. One sends real emails. One prints to console. The 
 
 This is the power of ports and adapters. Swap implementations without changing application logic.
 
-## In-Memory Adapters for Testing
+### In-Memory Adapters for Testing
 
-Remember the fake repositories from Chapter 7? Those are adapters too. Let's implement them properly:
+We've built several repository adapters (JSON files, SQLite databases) and service adapters (SMTP email). These are production adapters—they connect to real infrastructure.
+
+But we also need test adapters. In the first half of this chapter, we used simple in-memory implementations to test our use cases. Those were adapters too, just optimized for a different purpose.
+
+In-memory adapters are particularly valuable for testing because they:
+
+1. **Run fast**: No I/O, no database setup
+2. **Are isolated**: Each test starts with a clean state
+3. **Are simple**: Easy to understand and debug
+4. **Support test-specific methods**: Like `clear()` for cleanup
+
+Let's formalize these test adapters as proper production code. They're infrastructure implementations, just like SQLite or SMTP—but their "infrastructure" is memory, not external systems.
 
 ```python
 # infrastructure/adapters/in_memory/member_repository.py
@@ -678,9 +1880,9 @@ from application.ports.repositories import MemberRepository
 
 class InMemoryMemberRepository(MemberRepository):
     """
-    In-memory implementation of MemberRepository.
+    In-memory repository adapter for MemberRepository port.
     
-    Stores members in a dictionary. Fast, simple, perfect for testing.
+    Optimized for testing with additional helper methods.
     """
     
     def __init__(self):
@@ -722,7 +1924,7 @@ from application.ports.repositories import BookingRepository
 
 
 class InMemoryBookingRepository(BookingRepository):
-    """In-memory implementation of BookingRepository."""
+    """In-memory repository adapter for BookingRepository port."""
     
     def __init__(self):
         self._bookings: Dict[str, Booking] = {}
@@ -763,7 +1965,7 @@ from application.ports.repositories import FitnessClassRepository
 
 
 class InMemoryFitnessClassRepository(FitnessClassRepository):
-    """In-memory implementation of FitnessClassRepository."""
+    """In-memory repository adapter for FitnessClassRepository port."""
     
     def __init__(self):
         self._classes: Dict[str, FitnessClass] = {}
@@ -791,7 +1993,7 @@ class InMemoryFitnessClassRepository(FitnessClassRepository):
 
 Clean. Simple. Fast. No infrastructure dependencies. Perfect for tests.
 
-## Wiring It All Together: Dependency Injection
+### Wiring It All Together: Dependency Injection
 
 We have ports. We have adapters. Now we need to connect them.
 
@@ -857,7 +2059,7 @@ class ApplicationContainer:
     
     def process_waitlist_use_case(self) -> ProcessWaitlistUseCase:
         """Create a fully-wired ProcessWaitlistUseCase."""
-        # Note: We'd need a WaitlistRepository implementation too
+        # Note: We'd need a WaitlistRepository adapter too
         return ProcessWaitlistUseCase(
             waitlist_repository=None,  # Would wire this up
             member_repository=self.member_repository,
@@ -912,7 +2114,7 @@ if __name__ == "__main__":
 
 That's a working application. Load members from a database. Book them into classes. Send notifications. All through clean abstractions.
 
-## Testing with Different Adapters
+### Testing with Different Adapters
 
 The power of this architecture shows in testing. You can test use cases with fast, in-memory adapters:
 
@@ -1087,7 +2289,7 @@ class TestSqliteMemberRepository:
 
 Same port. Different adapters. Tests for both.
 
-## A Complete Running Example
+### A Complete Running Example
 
 Let's build a simple CLI application that demonstrates everything working together:
 
@@ -1201,7 +2403,7 @@ The complete system working. Domain logic enforcing rules. Application layer orc
 
 From abstract ports to concrete adapters to a running application.
 
-## Directory Structure
+### Directory Structure
 
 Here's what your complete codebase looks like now:
 
@@ -1259,7 +2461,7 @@ gym-booking/
 
 Every layer has its place. Domain at the core. Application orchestrating. Infrastructure on the outside. Dependencies pointing inward.
 
-## Handling Errors in Adapters
+### Handling Errors in Adapters
 
 Adapters sit at the boundary between your application and external systems. Networks fail. Databases go down. APIs return errors. You need to handle this gracefully.
 
@@ -1316,7 +2518,7 @@ def _send_email(self, to_email: str, subject: str, body: str) -> None:
 
 The use cases decide how to handle these exceptions. The adapters just raise them appropriately.
 
-## When to Create New Adapters
+### When to Create New Adapters
 
 You create a new adapter when:
 
@@ -1338,9 +2540,9 @@ You don't create a new adapter when:
 
 Adapters translate between domains. If you're not translating, you probably don't need an adapter.
 
-## When You Don't Need Multiple Adapters
+### When You Don't Need Multiple Adapters
 
-We built three repository implementations: in-memory, JSON, and SQLite. We created multiple notification services. This demonstrates flexibility. But do you always need it?
+We built three repository adapters (in-memory, JSON, and SQLite) and multiple service adapters (SMTP, console). This demonstrates flexibility. But do you always need it?
 
 **You don't need multiple adapters if:**
 
@@ -1355,12 +2557,13 @@ In these cases, **one concrete adapter is enough:**
 
 ```python
 # Just implement the port once
+# Repository port
 class MemberRepository(ABC):
     @abstractmethod
     def get_by_id(self, member_id: str) -> Optional[Member]:
         pass
 
-# Single production implementation
+# Single production repository adapter
 class PostgresMemberRepository(MemberRepository):
     def get_by_id(self, member_id: str) -> Optional[Member]:
         # PostgreSQL implementation
@@ -1396,15 +2599,37 @@ Not true. That's over-engineering. Most applications need two implementations: *
 3. When you need to swap infrastructure, add another production adapter
 4. Don't create implementations you don't use
 
-We built three repository adapters because we wanted to demonstrate swappability and show that no external dependencies are needed. Your application might only need SQLite for everything, or PostgreSQL + in-memory for tests. Build what you need, when you need it.
+We built three repository adapters for each repository port because we wanted to demonstrate swappability and show that no external dependencies are needed. Your application might only need one SQLite adapter for production and one in-memory adapter for tests. Build what you need, when you need it.
 
 Architecture serves the problem. Not the pattern collection.
 
-## The Architecture Is Complete
+## The Complete Picture
 
-You started with a problem: use cases need infrastructure, but depending on it violates the dependency rule.
+Let's step back and see what we've built.
 
-You defined ports in Chapter 7—abstractions that specify what the application needs without dictating how it's provided.
+We started this chapter with a dependency problem. Use cases were coupled to infrastructure. We couldn't test without databases. We couldn't swap implementations without changing application code.
+
+We solved it in two parts:
+
+**Part 1: Ports**—We defined abstract interfaces that specify what the application needs from infrastructure. `MemberRepository` declares `get_by_id()` and `save()`. `NotificationService` declares `send_booking_confirmation()`. Use cases depend on these abstractions, inverting the traditional dependency flow.
+
+**Part 2: Adapters**—We implemented concrete classes that fulfill the port contracts. We built repository adapters (SQLite, JSON files, in-memory storage) and service adapters (SMTP email, console output). Each adapter translates between domain concepts and infrastructure primitives.
+
+The result is hexagonal architecture:
+
+1. **Domain layer**: Entities and business rules that don't depend on anything
+2. **Application layer**: Use cases that depend only on ports
+3. **Ports**: Abstract interfaces that define contracts
+4. **Adapters**: Concrete implementations that connect to infrastructure
+5. **Dependency injection**: Configuration that wires it all together
+
+The dependencies flow inward. Infrastructure depends on application. Application depends on domain. Nothing flows outward.
+
+This isn't just theory. We've built a working system. You can test use cases in milliseconds with in-memory adapters. You can swap from SQLite to PostgreSQL by changing one line in the dependency injection container. You can deploy the same application code with different infrastructure configurations.
+
+You started with tightly coupled use cases that couldn't be tested or flexibly deployed.
+
+You defined ports—abstractions that specify what the application needs without dictating how it's provided.
 
 You've now implemented adapters—concrete classes that fulfill those contracts using real infrastructure.
 
@@ -1438,17 +2663,21 @@ Your codebase is organised. Your domain is pure. Your application is decoupled f
 
 The architecture serves the business logic. Not the other way around.
 
-## Summary
+## Chapter Summary
 
-Adapters implement ports using concrete infrastructure. They translate between the domain's language and the infrastructure's technical details.
+This chapter covered the complete ports and adapters pattern, building hexagonal architecture from the ground up.
 
-We built three different repository implementations for the same port:
+**Ports** are abstract interfaces that define what the application needs from infrastructure. They invert dependencies so use cases don't depend on concrete implementations like databases or email servers. Instead, they depend on abstractions—contracts that specify behavior without dictating implementation.
 
-1. **In-memory repositories** using Python dictionaries—fast, simple, perfect for testing
-2. **JSON file repositories** using Python's standard library—persistent but simple, no external dependencies
-3. **SQLite repositories** using Python's built-in `sqlite3`—real database with SQL, still no external dependencies
+**Adapters** implement ports using concrete infrastructure. They translate between the domain's language and the infrastructure's technical details.
 
-All three implement `MemberRepository`. All three work with the same use cases. All three are swappable at runtime. This demonstrates the power of ports and adapters—choose the infrastructure that fits your needs without changing application code.
+We built three different repository adapters for the same repository port:
+
+1. **In-memory repository adapters** using Python dictionaries—fast, simple, perfect for testing
+2. **JSON file repository adapters** using Python's standard library—persistent but simple, no external dependencies
+3. **SQLite repository adapters** using Python's built-in `sqlite3`—real database with SQL, still no external dependencies
+
+All three adapters implement the same repository port (e.g., `MemberRepository`). All three work with the same use cases. All three are swappable at runtime. This demonstrates the power of ports and adapters—choose the infrastructure that fits your needs without changing application code.
 
 We built service adapters for notifications—`SMTPNotificationService` for production and `ConsoleNotificationService` for development. Same port, different implementations, swappable at runtime.
 

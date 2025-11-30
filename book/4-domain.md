@@ -2,6 +2,13 @@
 
 We have layers. Domain logic lives in the domain layer, separated from infrastructure and interface. The structure is solid. But the domain itself is still shallow.
 
+**Terminology note:** This chapter uses three related but distinct terms:
+- **Domain** = the business problem we're solving (gym booking, scheduling, memberships)
+- **Domain layer** = the architectural layer containing domain code (`domain/` directory)
+- **Domain model** = the entities, value objects, and services that represent the domain
+
+The domain (business) is modeled by the domain model (code), which lives in the domain layer (architecture).
+
 New requirements arrive that expose this shallowness:
 
 **Complex booking rules:** Members can't cancel bookings within 2 hours of class time. Premium members get priority when classes are full. Members can only book one class per time slot.
@@ -28,7 +35,7 @@ class Member:
         return self.pricing_strategy.calculate_price()
 ```
 
-This class can't enforce the credit rules. It doesn't understand expiry. It doesn't validate that email addresses are actually valid. It's a data container, not a domain model.
+This class can't enforce the credit rules. It doesn't understand expiry. It doesn't validate that email addresses are valid. It's a data container with no behavior—an anemic domain model.
 
 We could add validation to the application layer:
 
@@ -68,7 +75,7 @@ The domain will stop being a passive data holder and become an active participan
 
 ## What Makes a Domain Rich?
 
-A rich domain model is one where business logic lives in the domain objects themselves, not scattered across services and controllers.
+A rich domain model is one where business logic lives in the domain objects themselves (entities, value objects, domain services), not scattered across use cases and controllers.
 
 Consider the `FitnessClass` from Chapter 3:
 
@@ -165,11 +172,11 @@ This is what richness means: the domain understands the rules and refuses to bre
 
 ## Entities: Identity and Lifecycle
 
-Entities are objects defined by their identity, not their attributes.
+Entities have identity; value objects don't. Two members named "Sarah" are different people (entities). Two time slots from 10-11am on Monday are identical (value objects).
+
+Entities are objects defined by their identity, not their attributes. A member with ID "M001" named "Sarah" is still the same member even if she changes her email, updates her membership type, or modifies her name. The identity persists through changes.
 
 Two members with the name "Sarah" and email "sarah@example.com" are not the same member. They're different people who happen to share attributes. What distinguishes them is identity—an ID, a unique identifier that tracks them through their lifecycle.
-
-Entities have identity. They change over time. They have continuity. You can modify a member's email address, but they're still the same member.
 
 Here's `Member` evolved from Chapter 3 into a proper entity:
 
@@ -305,9 +312,9 @@ Entities are distinguished by identity. They evolve. They protect their invarian
 
 ## Value Objects: Concepts Without Identity
 
-Not everything needs identity. Some concepts are defined entirely by their attributes.
+Value objects are the opposite of entities: they're defined entirely by their attributes, not by identity.
 
-Consider a time slot: 10:00 AM to 11:00 AM on Monday. If you have two time slots with those exact values, they're the same time slot. There's no distinction. No identity to track. The attributes are the thing.
+Consider a time slot: 10:00 AM to 11:00 AM on Monday. If you have two time slots with those exact values, they're the same time slot. There's no "identity" to track—no ID, no lifecycle. The attributes are the thing. If the attributes match, the value objects are identical and interchangeable.
 
 These are value objects. They're immutable. They're interchangeable. Two value objects with the same attributes are equal, by definition.
 
@@ -441,83 +448,13 @@ Now a fitness class has a proper time slot. Not just strings or separate hour/mi
 
 Value objects make your domain expressive. Instead of primitive obsession (strings, ints, floats everywhere), you use types that reflect business concepts. `EmailAddress` instead of `str`. `ClassCapacity` instead of `int`. `TimeSlot` instead of separate date/time fields.
 
-This makes impossible states actually impossible. You can't have an invalid email. You can't have a negative capacity. You can't have a time slot where the start comes after the end. The type system enforces business rules.
+This makes impossible states impossible. You can't have an invalid email. You can't have a negative capacity. You can't have a time slot where the start comes after the end. The type system enforces business rules.
 
 ## Project Structure: Where Does the Code Actually Live?
 
-Understanding domain concepts is one thing. Knowing where to put the actual files is another.
+You've built entities and value objects. Now where do they go? A flat `domain/` folder gets cluttered past 10 classes. Nested subdirectories by aggregate add complexity before you understand the domain.
 
-You've seen `Member`, `FitnessClass`, and several value objects. But where do they go? Do you create `member.py` and `fitness_class.py` in a flat `domain/` folder? Or do you create `domain/member/member.py` with nested subdirectories? What about value objects—do they get their own files or share one?
-
-These aren't just organisational questions. The structure you choose affects how easy it is to find code, understand boundaries, and navigate the codebase.
-
-### Flat vs Nested Structure
-
-You have two main approaches:
-
-**Flat structure (good for small domains):**
-```
-domain/
-    member.py
-    fitness_class.py
-    booking.py
-    time_slot.py
-    email_address.py
-    membership_type.py
-    exceptions.py
-```
-
-Everything in one directory. Simple. No deep import paths. Easy to scan.
-
-**Nested structure (good for larger domains):**
-```
-domain/
-    member/
-        __init__.py
-        member.py
-        membership_type.py
-        exceptions.py
-    booking/
-        __init__.py
-        booking.py
-        booking_status.py
-        exceptions.py
-    fitness_class/
-        __init__.py
-        fitness_class.py
-        time_slot.py
-        capacity.py
-    shared/
-        email_address.py
-```
-
-Each aggregate or entity gets its own package. Related concepts grouped together. Clear boundaries.
-
-### The Trade-offs
-
-**Flat structure:**
-- ✅ Easier to navigate when starting out—everything is in one place
-- ✅ No question about where things go—just add another file
-- ✅ Fewer import path levels: `from domain.member import Member`
-- ✅ Works well for 5-10 domain classes
-- ❌ Gets cluttered past ~10 entities
-- ❌ Related concepts scattered across files alphabetically
-- ❌ Harder to see aggregate boundaries
-- ❌ No clear ownership when multiple developers work on domain
-
-**Nested structure:**
-- ✅ Clear aggregate boundaries—each folder is a consistency boundary
-- ✅ Scales better as the domain grows
-- ✅ Related concepts grouped together naturally
-- ✅ Easier to see what belongs with what
-- ❌ More upfront decisions about grouping
-- ❌ Deeper import paths: `from domain.member.member import Member`
-- ❌ Can lead to over-organization (folders with one file)
-- ❌ Premature structure before you understand the domain
-
-### Our Approach for the Gym Booking System
-
-For this book, we'll use a **hybrid approach** that balances organisation with simplicity:
+We'll use a **hybrid approach**—organize by building block type (entity, value object, service):
 
 ```
 domain/
@@ -540,95 +477,12 @@ domain/
     __init__.py
 ```
 
-We're grouping by *type of building block* (entity, value object, service) rather than by aggregate or subdomain.
+**Why this works:** Clear separation between building blocks. Easy to find things. Doesn't require deep domain understanding upfront. Avoids flat-folder clutter while staying simple.
 
-**Why this works:**
-- Clear separation between entities and value objects
-- Easy to find what you're looking for based on what it is
-- Doesn't require deep domain understanding upfront
-- Avoids the "everything in one folder" clutter
-- Room to grow without restructuring
+Small related classes can share files (`DayOfWeek` and `TimeSlot` in `time_slot.py`). Entities get their own files.
 
-**How imports look:**
+We'll use `__init__.py` to re-export classes for cleaner imports:
 
-```python
-from domain.entities.member import Member
-from domain.entities.fitness_class import FitnessClass
-from domain.value_objects.time_slot import TimeSlot, DayOfWeek
-from domain.value_objects.email import EmailAddress
-from domain.exceptions import ClassFullException, InsufficientCreditsException
-```
-
-Clear, explicit, and searchable.
-
-### One File or Many?
-
-Another question: should related classes share a file?
-
-**Small value objects can share:**
-```python
-# domain/value_objects/time_slot.py
-from enum import Enum
-from datetime import time
-
-class DayOfWeek(Enum):
-    MONDAY = "Monday"
-    TUESDAY = "Tuesday"
-    # ...
-
-class TimeSlot:
-    def __init__(self, day: DayOfWeek, start: time, end: time):
-        # ...
-```
-
-`DayOfWeek` and `TimeSlot` are used together. They're small. Keeping them in one file makes sense.
-
-**Entities typically get their own file:**
-```python
-# domain/entities/member.py
-class Member:
-    # ...
-```
-
-Even though `MembershipType` is closely related to `Member`, it's actually a value object, so it goes in the value_objects folder.
-
-**The rule:** If two classes are always used together and one doesn't make sense without the other, they can share a file. Otherwise, separate them.
-
-### When to Refactor Your Structure
-
-Don't start with the perfect structure. Start simple and refactor as you learn.
-
-**Start flat when:**
-- You have fewer than 8 domain classes
-- You're still figuring out the domain
-- It's a new project and structure is premature
-
-**Move to hybrid (our approach) when:**
-- You have 8-15 domain classes
-- You understand the main concepts
-- You want some organisation without deep nesting
-
-**Move to fully nested when:**
-- You have multiple bounded contexts
-- You have distinct subdomains (member management, class scheduling, billing)
-- Different teams own different parts of the domain
-- You have 20+ domain classes
-
-The structure should serve the code, not the other way around. If you're spending more time deciding where to put a file than writing it, your structure is too complex.
-
-### What About `__init__.py`?
-
-Each folder needs an `__init__.py` to be a Python package, but what goes inside?
-
-**Option 1: Empty (simplest)**
-```python
-# domain/entities/__init__.py
-# Empty file
-```
-
-Imports are explicit: `from domain.entities.member import Member`
-
-**Option 2: Re-export key classes (convenient)**
 ```python
 # domain/entities/__init__.py
 from domain.entities.member import Member
@@ -637,13 +491,9 @@ from domain.entities.fitness_class import FitnessClass
 __all__ = ["Member", "FitnessClass"]
 ```
 
-Now you can import: `from domain.entities import Member, FitnessClass`
+This lets you write `from domain.entities import Member` instead of `from domain.entities.member import Member`.
 
-**We'll use Option 2** because it makes imports cleaner and explicitly declares the public API of each package. If a class isn't in `__all__`, it's an internal implementation detail.
-
-### The Final Structure
-
-Here's what our complete domain layer looks like on disk after both chapters 4 and 5:
+**The complete structure:**
 
 ```
 domain/
@@ -667,32 +517,7 @@ domain/
     __init__.py              # Re-exports the most commonly used classes
 ```
 
-The root `domain/__init__.py` can make common imports even easier:
-
-```python
-# domain/__init__.py
-from domain.entities import Member, FitnessClass
-from domain.value_objects import TimeSlot, EmailAddress
-from domain.exceptions import (
-    ClassFullException,
-    InsufficientCreditsException
-)
-
-__all__ = [
-    "Member",
-    "FitnessClass", 
-    "TimeSlot",
-    "EmailAddress",
-    "ClassFullException",
-    "InsufficientCreditsException",
-]
-```
-
-Now application code can use: `from domain import Member, FitnessClass, ClassFullException`
-
-This is clean, discoverable, and maintainable. The structure reflects the domain concepts. Finding code is straightforward. Adding new classes has a clear pattern.
-
-Start here. Refactor when it stops serving you.
+Start with this structure. Refactor to fully nested (subdirectories per aggregate) if you grow to 20+ domain classes or have multiple bounded contexts.
 
 ## Aggregates
 
@@ -925,7 +750,7 @@ Notice how it references `Member` and `FitnessClass` by ID, following the same p
 
 Not all business logic belongs in entities or value objects. Sometimes logic involves multiple objects or concepts that don't naturally fit into any single class.
 
-Consider class scheduling. You need to ensure two classes don't overlap in the same room. That's business logic. But does it belong in `FitnessClass`? Not really—it involves two classes and a room. Does it belong in `Room`? Maybe, but rooms aren't the primary concept here.
+Consider class scheduling. You need to ensure two classes don't overlap in the same room. That's business logic. But does it belong in `FitnessClass`? No—it involves two classes and a room. Does it belong in `Room`? Maybe, but rooms aren't the primary concept here.
 
 This is where domain services come in. They're stateless objects that implement business logic that doesn't naturally belong to any entity.
 
@@ -986,7 +811,7 @@ class ClassSchedulingService:
 
 The `ClassSchedulingService` contains logic that involves multiple domain objects. It doesn't belong to `FitnessClass` because it's not about a single class—it's about how classes relate to each other and to rooms.
 
-Domain services are different from application services. Application services coordinate use cases ("book a class"). Domain services implement business logic that crosses entity boundaries ("can this class be scheduled in this room?").
+Domain services are different from use cases. Use cases coordinate workflows ("book a class"). Domain services implement business logic that crosses entity boundaries ("can this class be scheduled in this room?").
 
 Use domain services sparingly. Most logic should live in entities or value objects. But when logic genuinely doesn't fit, don't force it. Create a domain service.
 
@@ -1180,7 +1005,7 @@ This is a rich domain model. Business logic lives in domain objects. Rules are e
 
 ## When You Don't Need Rich Domain Models
 
-Rich domain models have costs. Value objects add complexity. Aggregates require discipline. Domain services need careful boundaries. Before you rush to build a rich domain, ask: do you actually need it?
+Rich domain models have costs. Value objects add complexity. Aggregates require discipline. Domain services need careful boundaries. Before you rush to build a rich domain, ask: do you need it?
 
 **You don't need a rich domain model if:**
 

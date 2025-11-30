@@ -45,19 +45,7 @@ Critical weaknesses include:
 
 **Incomplete References**: Multiple references to "Chapter 4b" that doesn't exist. References to waitlist functionality that gets introduced mid-chapter without proper setup.
 
-### Target Audience Clarity
 
-**Stated Audience**: Python developers who understand basics (functions, classes, OOP) but struggle with architecture. Developers whose "script became a system you're afraid to touch."
-
-**Actual Audience**: The book successfully targets intermediate Python developers. The prerequisites are clearly stated. Code examples assume Python 3.8+ features without explanation, which is appropriate.
-
-**Audience Confusion**: However, Chapter 1's philosophy section targets absolute beginners to architecture, while Chapter 8's SQLAlchemy implementation assumes significant Python ecosystem knowledge. This creates tension.
-
-**Recommendation**: Tighten the audience definition. Choose between:
-- Beginner-friendly (add more explanations of tools like SQLAlchemy, abstract base classes, type hints)
-- Intermediate-focused (remove basic explanations, assume SQLAlchemy familiarity)
-
-Currently, it awkwardly straddles both.
 
 ### Delivers on Stated Purpose?
 
@@ -71,78 +59,10 @@ Currently, it awkwardly straddles both.
 
 ## 2. Structural & Organizational Issues
 
-### Chapter Ordering Problems
-
-**Chapter 4 and 5 Must Be Merged**
-
-The current split:
-- Chapter 4: Entities and Value Objects
-- Chapter 5: Aggregates and Domain Services
-
-This division is artificial. Readers need aggregates to understand entity boundaries. The Chapter 4 section on "Project Structure" interrupts the domain modeling flow. The "Chapter 4b" references are confusing and unprofessional.
-
-**Recommendation**: Merge into single "Chapter 4: Domain Modeling" with subsections:
-1. What Makes a Domain Rich?
-2. Entities: Identity and Lifecycle
-3. Value Objects: Concepts Without Identity
-4. Aggregates: Consistency Boundaries
-5. Domain Services: Logic That Doesn't Fit
-6. Domain Exceptions
-7. File Organization (condensed)
-
-**Chapter 3 Before Chapter 2?**
-
-Some readers would benefit from seeing the overall structure (Chapter 3: Layers) before diving into SOLID principles (Chapter 2). The current order works but isn't obvious.
-
-Alternative flow to consider:
-- Introduction
-- Philosophy
-- **Layers (overview)**
-- SOLID (with layers context)
-- Domain (current 4+5 merged)
-- Use Cases
-- Ports
-- Adapters
-
-This makes each SOLID principle's placement in the architecture clearer. However, the current order (SOLID before Layers) also works because it teaches principles before showing where they live.
-
-**Decision**: Keep current chapter order but improve transitions.
 
 ### Logical Flow Issues
 
-**Chapter 6 Problem Setup is Repetitive**
-
-Chapter 6 spends the first several pages re-explaining why use cases exist and why they can't depend on infrastructure. This was already covered in Chapters 3 and conceptually in Chapter 1. The "Uh Oh" moment feels manufactured because we've already been told this three times.
-
-**Fix**: Cut the repetitive setup. Chapter 6 should start with "Now let's build the application layer that orchestrates our domain" and dive into BookClassUseCase immediately. The dependency problem can be revealed naturally when writing the code, not pre-announced.
-
-**Chapter 7-8 Feels Like One Chapter**
-
-Chapters 7 (Ports) and 8 (Adapters) are really one concept split across two chapters. You can't meaningfully discuss ports without showing adapters, and the entire payoff of ports is seeing adapters implement them.
-
-**Consideration**: Merge into "Chapter 7: Ports and Adapters" or keep split but:
-- Chapter 7 ends with complete in-memory test adapters
-- Chapter 8 focuses only on production infrastructure (SQLAlchemy, SMTP)
-
-Current split feels like an artificial page count expansion.
-
 ### Redundancy Problems
-
-**Dependency Inversion Gets Re-Explained 5 Times**
-
-1. Chapter 2 (SOLID): Full explanation with code examples
-2. Chapter 3 (Layers): Re-explained in context of layer dependencies
-3. Chapter 6 (Use Cases): Re-explained as "the problem we haven't solved"
-4. Chapter 7 (Ports): Re-explained as "the dependency problem"
-5. Chapter 8 (Adapters): Referenced again
-
-**Each time it's the same concept**: high-level shouldn't depend on low-level.
-
-**Fix**: 
-- Chapter 2: Introduce the principle with simple examples
-- Chapter 3: Reference it ("This is Dependency Inversion from Chapter 2 at a system level")
-- Chapter 6: Brief reminder when revealing the problem
-- Chapter 7/8: Implement it without re-explaining
 
 **"What This Is Not" Repetition**
 
@@ -179,14 +99,6 @@ Chapter 6 ends with "We need ports" which feels like a cliffhanger. This might w
 
 ### Sections Needing Expansion
 
-**Chapter 1: Constraints Shape Architecture**
-
-This section introduces a critical concept (Conway's Law, team constraints, technical constraints) but doesn't give enough examples. Expand with:
-- Solo developer vs 50-person team differences
-- Greenfield vs legacy system differences
-- Startup vs enterprise differences
-
-Currently too abstract.
 
 **Chapter 2: When SOLID Doesn't Matter**
 
@@ -215,23 +127,7 @@ Section exists but is too brief. Expand with:
 
 ### Sections Needing Compression
 
-**Chapter 4: Project Structure (Lines 396-646)**
 
-This 250-line section interrupts domain modeling to discuss directory structures. It's useful but too long and misplaced.
-
-**Compress to 50 lines** covering:
-- "We'll organize using hybrid approach: entities/, value_objects/, services/"
-- Brief rationale
-- Show the structure
-- Move detailed trade-off discussion to appendix
-
-**Chapter 7: "What We Can't Do Yet" (Lines 1126-1173)**
-
-This section laboriously explains that abstract classes can't be instantiated. Python developers know this. Compress to 2 paragraphs.
-
-**Chapter 8: Directory Structure (Lines 1186-1242)**
-
-Already shown in previous chapters. Cut entirely or condense to 10 lines referencing earlier structure.
 
 ### Opportunities for Narrative Cohesion
 
@@ -272,50 +168,7 @@ Standardize: Every chapter ends with:
 
 ### Confusing Explanations
 
-**Chapter 1: "Architecture is choosing what's easy to change"**
 
-This definition appears early (line 12) but isn't unpacked until later. First mention should include an example:
-
-> "Architecture is choosing the parts of your system that must be easy to change, and protecting them from the parts that won't be. For example, pricing rules change frequently, so they live in the domain. Database choice changes rarely, so it's isolated in infrastructure."
-
-**Chapter 3: "Dependencies flow inward"**
-
-The explanation of dependency direction (lines 269-301) uses a diagram, but the text explanation is circular: "Inward means toward the domain. Domain is the center. So dependencies point to the center."
-
-**Better**: "Dependencies flow from outer layers (Interface, Infrastructure) toward inner layers (Application, Domain). Think of it like gravity—everything depends on the core, but the core depends on nothing external."
-
-**Chapter 4: Entity vs Value Object**
-
-The distinction is explained (lines 117-254) but takes too long to clarify. The key difference—identity vs attributes—gets buried.
-
-**Clearer opening**: "Entities have identity; value objects don't. Two members named 'Sarah' are different people (entities). Two time slots from 10-11am on Monday are identical (value objects)."
-
-**Chapter 7: Port Definition**
-
-"A port is a contract" (line 110) is vague. Better: "A port is an abstract interface that defines *what* the application needs from infrastructure, without specifying *how* it's provided. It's a Python ABC with abstract methods."
-
-### Unclear or Inconsistent Terminology
-
-**"Use Case" vs "Application Service"**
-
-These terms are used interchangeably without explanation. Chapter 6 uses "use case," Chapter 7 mentions "application service" once. Pick one term and stick with it. (Recommendation: "Use Case" since it's more widely understood)
-
-**"Adapter" vs "Implementation"**
-
-Chapter 8 switches between calling things "adapters" and "concrete implementations" without consistency. The SQLAlchemy classes are called "adapters" in headers but "implementations" in text.
-
-**"Repository" Inconsistency**
-
-Sometimes "repository pattern," sometimes just "repository," sometimes "persistence port." Be consistent: use "repository" for the concept, "repository port" for the abstraction, "repository adapter" for implementations.
-
-**"Domain Model" vs "Domain Layer" vs "Domain"**
-
-These get used interchangeably:
-- "Domain model" = the entities and value objects
-- "Domain layer" = the architectural layer containing domain code
-- "Domain" = the business subject matter
-
-Clarify these distinctions early and use them consistently.
 
 **"Infrastructure" Confusion**
 
@@ -382,13 +235,7 @@ Enums used without explanation. Add: "Enums provide type-safe constants. `Bookin
 
 Introduced as "a popular Python ORM" but never explains ORM. Add: "ORM (Object-Relational Mapping) translates between Python objects and database rows"
 
-**Chapter 8, Line 567: `MIMEText`, `MIMEMultipart`**
 
-Email MIME types used without explanation. Most developers know these, but add: "MIME types format email messages for SMTP transmission"
-
-**Chapter 8, Line 1024: `@pytest.fixture`**
-
-Pytest fixtures used without explanation. Add: "Fixtures are reusable test setup code that pytest injects into tests"
 
 ### Repetitive or Unfocused Sections
 

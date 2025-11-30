@@ -2,94 +2,11 @@
 
 We have a rich domain. `Member`, `FitnessClass`, and `Booking` entities enforce business rules. Value objects like `TimeSlot` and `EmailAddress` make invalid states impossible. The domain layer is solid.
 
-But now we need to actually use it. The gym wants multiple ways to book classes:
+Now we need to build the application layer that orchestrates it.
 
-**Web API:** Users book through a REST endpoint  
-**Admin panel:** Staff books classes on behalf of members  
-**Automated system:** Process waitlist when someone cancels  
-**Bulk import:** Load bookings from a CSV file
+A use case is a single place that defines one complete workflow. "Book a class." "Cancel a booking." "Process waitlist." Each use case coordinates domain objects to accomplish a specific goal.
 
-Each of these needs the same workflow: verify the member exists, check they have credits, verify class capacity, deduct credit, add booking, save changes, send notification. But where does this orchestration live?
-
-Right now, we're duplicating it everywhere:
-
-```python
-# In the REST API handler
-@app.route('/bookings', methods=['POST'])
-def book_class_api():
-    data = request.json
-    
-    # Load domain objects
-    member = member_repo.get_by_id(data['member_id'])
-    fitness_class = class_repo.get_by_id(data['class_id'])
-    
-    # Orchestrate the workflow
-    if not member or not fitness_class:
-        return jsonify({'error': 'Not found'}), 404
-    
-    member.deduct_credit()
-    fitness_class.add_booking(member.id)
-    
-    booking = Booking(generate_id(), member.id, fitness_class.id)
-    
-    member_repo.save(member)
-    class_repo.save(fitness_class)
-    booking_repo.save(booking)
-    
-    email_service.send_confirmation(member, fitness_class)
-    
-    return jsonify({'booking_id': booking.id}), 201
-
-
-# In the admin panel
-def admin_book_class(member_id, class_id):
-    # Same workflow duplicated
-    member = member_repo.get_by_id(member_id)
-    fitness_class = class_repo.get_by_id(class_id)
-    
-    if not member or not fitness_class:
-        raise ValueError("Not found")
-    
-    member.deduct_credit()
-    fitness_class.add_booking(member.id)
-    
-    booking = Booking(generate_id(), member.id, fitness_class.id)
-    
-    member_repo.save(member)
-    class_repo.save(fitness_class)
-    booking_repo.save(booking)
-    
-    email_service.send_confirmation(member, fitness_class)
-    
-    return booking
-
-
-# In the waitlist processor
-def process_waitlist_entry(waitlist_entry):
-    # Same workflow duplicated AGAIN
-    member = member_repo.get_by_id(waitlist_entry.member_id)
-    fitness_class = class_repo.get_by_id(waitlist_entry.class_id)
-    
-    # ... exact same logic repeated
-```
-
-This is a mess:
-
-1. **Duplication everywhere:** The booking workflow is copied in three places
-2. **No single source of truth:** Change the workflow? Update it in every location
-3. **Inconsistent behavior:** Easy to forget a step in one place but not another
-4. **Hard to test:** Have to test the workflow three times in three different contexts
-5. **No clear entry points:** Where do you look to understand "how does booking work?"
-
-We separated domain from infrastructure with layers. We enriched the domain with entities and value objects. But we haven't separated **orchestration** from **presentation**.
-
-The workflow logic (load → validate → domain operations → save → notify) doesn't belong in API handlers or admin interfaces. Those are just different ways to trigger the same operation.
-
-**The code is asking for use cases.**
-
-A use case is a single place that defines one complete workflow. "Book a class." "Cancel a booking." "Process waitlist." Each use case orchestrates domain objects and infrastructure to accomplish a specific goal. Interface layers call use cases. They don't duplicate orchestration logic.
-
-This chapter extracts those use cases from the scattered duplication and creates clear entry points to your application.
+This chapter builds those use cases.
 
 ## What Is a Use Case?
 
@@ -107,7 +24,7 @@ Use cases are:
 
 Use cases are not:
 - **Business rules**: Those belong in the domain
-- **CRUD operations**: "Create a booking" is too generic—what are you actually trying to accomplish?
+- **CRUD operations**: "Create a booking" is too generic—what are you trying to accomplish?
 - **Infrastructure concerns**: Saving to a database is a detail, not a use case
 - **UI actions**: "Click the book button" describes interaction, not intent
 
@@ -436,7 +353,7 @@ class ProcessWaitlistUseCase:
         if not fitness_class:
             raise ValueError(f"Class {class_id} not found")
         
-        # 2. Check if there's actually space
+        # 2. Check if there's space
         if fitness_class.is_full():
             return None  # No space available, nothing to do
         
@@ -501,7 +418,7 @@ This use case shows the complexity that can emerge even with simple business rul
 
 **Error recovery**: If the next person on the waitlist has no credits or doesn't exist anymore, remove them and try the next person. The domain enforces the rules; the use case handles the coordination.
 
-**Race conditions**: Between checking if the class has space and actually booking, another process might fill the spot. The use case handles this by catching `ClassFullException` and rolling back the credit deduction.
+**Race conditions**: Between checking if the class has space and booking, another process might fill the spot. The use case handles this by catching `ClassFullException` and rolling back the credit deduction.
 
 **Recursive processing**: Processing the waitlist is inherently recursive—if one person can't be booked, try the next. The use case orchestrates this flow.
 
@@ -660,21 +577,13 @@ Use cases exist to coordinate complexity. If there's no complexity to coordinate
 
 ## The Problem We Haven't Solved
 
-Look back at all the use cases we've built. They work. They orchestrate domain logic cleanly. They handle errors. They coordinate multiple aggregates.
-
-But there's a problem. A big one.
-
-Look at this line:
+Look at this line from our use cases:
 
 ```python
 member = self.member_repository.get_by_id(member_id)
 ```
 
-What is `member_repository`? Where does it come from? What does it do?
-
-It loads a member from somewhere. Probably a database. Maybe a file. Maybe an external API. We don't know, and that's the point—the use case doesn't care *how* members are loaded. It just needs to load them.
-
-But here's the issue: `member_repository` is infrastructure. It's a concrete implementation that talks to a database. And our use case depends on it.
+What is `member_repository`? Right now, it's a concrete object—probably `PostgresMemberRepository` or `SqliteMemberRepository`. Our use case depends on infrastructure.
 
 Look at the constructor:
 
@@ -687,87 +596,13 @@ def __init__(self, member_repository, class_repository,
     self.notification_service = notification_service
 ```
 
-We're passing in concrete objects. These objects know about databases. They know about SQL. They know about email APIs. And our application layer—which is supposed to be pure business orchestration—depends on them.
+The application layer depends on infrastructure. This violates the dependency rule from Chapter 3 and the Dependency Inversion Principle from Chapter 2. The dependency points the wrong way.
 
-This violates the dependency rule. Remember from Chapter 3:
+To test `BookClassUseCase`, you need a real database. Or elaborate mocks that break when the real implementation changes.
 
-**Domain depends on nothing. Application depends on domain. Infrastructure depends on domain and application.**
+Remember Dependency Inversion? High-level modules (application) shouldn't depend on low-level modules (infrastructure). Both should depend on abstractions.
 
-But right now, our application layer depends on infrastructure. We've broken the rule.
-
-Here's what that looks like in practice. Suppose you want to test `BookClassUseCase`. You write a test:
-
-```python
-def test_booking_class():
-    # But what do we pass here?
-    use_case = BookClassUseCase(
-        member_repository=???,  # This needs a database connection
-        class_repository=???,   # This too
-        booking_repository=???, # And this
-        notification_service=???  # And this needs email configuration
-    )
-    
-    use_case.execute("M001", "C001")
-```
-
-To test the use case, you need a real database. You need a real email server. Or you need to create mocks. But the mocks need to match the exact interface of the real implementations. Any time the real implementation changes, your mocks break.
-
-This is tight coupling. The application layer can't exist without infrastructure. You can't test it independently. You can't swap implementations without changing the use case code.
-
-And there's a worse problem: the direction of dependency is wrong.
-
-Infrastructure should depend on application, not the other way around. High-level policy (business orchestration) should not depend on low-level details (database access). But right now, it does.
-
-We need a way for the application layer to express what it needs—"I need to load members"—without depending on how it's provided—"from a PostgreSQL database with this specific connection string."
-
-We need abstractions. Interfaces. Contracts that define *what* the application needs, letting infrastructure provide *how* it's done.
-
-We need ports.
-
-## The "Uh Oh" Moment
-
-You built a beautiful domain model. Rich objects. Clear boundaries. Business logic where it belongs.
-
-You built clean use cases. They orchestrate without duplicating logic. They handle errors. They coordinate workflows.
-
-But you can't ship this code.
-
-Try it. Try to deploy `BookClassUseCase` to production. What database do you connect to? Where's the connection string? How do you configure the email service? What happens when you want to run tests—do you need a real database running?
-
-You can't run any of it without infrastructure. And depending on infrastructure couples you to implementation details you wanted to avoid.
-
-**This is the problem that breaks most architectural attempts.**
-
-You follow the rules. You structure your code carefully. You separate concerns. And then you hit the wall: the use cases need to persist data. They need to send emails. They need to talk to the outside world.
-
-Look at this constructor again:
-
-```python
-def __init__(self, member_repository, class_repository, 
-             booking_repository, notification_service):
-```
-
-What types are these? Right now, they're concrete implementations. `PostgresMemberRepository`. `SMTPNotificationService`. Your application layer is hardcoded to specific infrastructure choices.
-
-Want to switch databases? Change the use case.  
-Want to test without a database? Change the use case.  
-Want to run in a different environment? Change the use case.
-
-This isn't loose coupling. This is tight coupling with extra steps.
-
-You need infrastructure. But you don't want to depend on it.
-
-This tension is the heart of hexagonal architecture, ports and adapters, dependency inversion—all those patterns exist to solve this one problem: how do you use infrastructure without depending on it?
-
-The answer is simple in concept: depend on abstractions, not implementations.
-
-But what does that actually mean? How do you define the abstractions? Where do they live? How do you wire everything together? And crucially: how do you do this without creating more complexity than you're solving?
-
-That's what the next chapter is for.
-
-We've built the domain. We've built the application layer. Now we need to connect them to the real world without breaking the dependency rule.
-
-We need ports.
+We need abstractions. That's where ports come in.
 
 ## When You Don't Need Use Cases
 
