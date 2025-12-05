@@ -309,6 +309,16 @@ class CancelBookingUseCase:
         )
 ```
 
+**Project Evolution:**
+- In Chapter 1, cancellation was a simple function that refunded credits
+- In Chapter 2, we separated concerns but logic was still scattered
+- In Chapter 3, we wrote tests that defined cancellation behavior
+- In Chapter 4, we separated cancellation logic into layers
+- In Chapter 5, we added `Booking.cancel()` to enforce business rules (2-hour limit)
+- Now in Chapter 6, the use case orchestrates the workflow: load entities, call domain methods, persist changes, send notifications
+- This separation means we can test cancellation rules in the domain without touching repositories or notification services
+
+
 This use case demonstrates several important patterns:
 
 **Defensive loading**: Check if objects exist before operating on them. The domain can't enforce rules on objects that aren't there.
@@ -535,7 +545,7 @@ This creates coupling between use cases. Now you can't change `BookClassUseCase`
 Use cases should be independent. If you need to book *or* waitlist, create a single use case that handles both scenarios:
 
 ```python
-from domain.entities import WaitlistEntry  # Defined in Chapter 4b
+from domain.entities import WaitlistEntry  # Part of domain model
 
 class BookClassOrWaitlistUseCase:
     def execute(self, member_id: str, class_id: str):

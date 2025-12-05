@@ -298,6 +298,15 @@ class Member:
         self._credits_expiry = datetime.now() + timedelta(days=30)
 
 
+**Project Evolution:**
+- In Chapter 1, we had a simple `Member` dictionary with just `credits`
+- In Chapter 2, we applied SOLID and created a `Member` class
+- In Chapter 3, we wrote tests first to define the interface
+- In Chapter 4, we separated the `Member` entity into the domain layer
+- Now in Chapter 5, we've enriched `Member` with value objects (`EmailAddress`), expiry logic, and proper encapsulation
+- This change was easy because we followed the dependency rule—domain doesn't depend on infrastructure
+
+
 class InsufficientCreditsException(Exception):
     pass
 ```
@@ -462,8 +471,8 @@ domain/
         __init__.py
         member.py          # Member entity
         fitness_class.py   # FitnessClass entity  
-        booking.py         # Booking aggregate root (covered in 4b)
-        room.py            # Room entity (covered in 4b)
+        booking.py         # Booking aggregate root (covered later)
+        room.py            # Room entity (if needed)
     value_objects/
         __init__.py
         time_slot.py       # TimeSlot, DayOfWeek
@@ -472,7 +481,7 @@ domain/
         membership.py      # MembershipType
     services/
         __init__.py
-        scheduling.py      # ClassSchedulingService (covered in 4b)
+        scheduling.py      # ClassSchedulingService (if needed)
     exceptions.py          # All domain exceptions
     __init__.py
 ```
@@ -498,12 +507,12 @@ This lets you write `from domain.entities import Member` instead of `from domain
 ```
 domain/
     entities/
-        __init__.py          # Re-exports Member, FitnessClass, Booking, Room, WaitlistEntry
+        __init__.py          # Re-exports Member, FitnessClass, Booking, etc.
         member.py            # Member entity (covered in this chapter)
         fitness_class.py     # FitnessClass entity (covered in this chapter)
-        booking.py           # Booking aggregate (covered in 4b)
-        room.py              # Room entity (covered in 4b)
-        waitlist_entry.py    # WaitlistEntry entity (covered in 4b)
+        booking.py           # Booking aggregate (covered in Chapter 6)
+        room.py              # Room entity (if needed)
+        waitlist_entry.py    # WaitlistEntry entity (if needed)
     value_objects/
         __init__.py          # Re-exports all value objects
         time_slot.py         # TimeSlot and DayOfWeek (covered in this chapter)
@@ -512,7 +521,7 @@ domain/
         membership.py        # MembershipType (covered in this chapter)
     services/
         __init__.py          # Re-exports ClassSchedulingService
-        scheduling.py        # ClassSchedulingService (covered in 4b)
+        scheduling.py        # ClassSchedulingService (if needed)
     exceptions.py            # All domain exceptions
     __init__.py              # Re-exports the most commonly used classes
 ```

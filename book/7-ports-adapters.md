@@ -697,6 +697,17 @@ class CancelBookingUseCase:
         fitness_class = self.class_repository.get_by_id(booking.class_id)
         if not fitness_class:
             raise ValueError(f"Class {booking.class_id} not found")
+
+
+**Project Evolution:**
+- In Chapter 1, our code was tightly coupled to SQLite
+- In Chapter 2, we separated classes but they still knew about databases
+- In Chapter 3, we wrote tests but they required real infrastructure
+- In Chapter 4, we created layers but dependencies pointed the wrong way
+- In Chapter 5, we built a rich domain but use cases depended on concrete repositories
+- In Chapter 6, we created use cases but couldn't test them without databases
+- Now in Chapter 7, we've inverted dependencies with ports—use cases depend on abstractions, adapters implement them
+- This change enables fast tests, swappable infrastructure, and true separation of concerns
         
         # 3. Calculate class start time
         class_start_time = self._get_next_class_occurrence(fitness_class.time_slot)
@@ -2331,15 +2342,15 @@ def seed_data(container: ApplicationContainer):
 
 def main():
     """Run the CLI application."""
-    database_url = "sqlite:///fitness.db"
+    database_path = "fitness.db"
     
     # Set up database
     print("Setting up database...")
-    setup_database(database_url)
+    setup_database(database_path)
     
     # Create application container
     container = ApplicationContainer(
-        database_url=database_url,
+        database_url=database_path,
         use_real_email=False
     )
     
