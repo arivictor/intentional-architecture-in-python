@@ -1,6 +1,6 @@
-# Chapter 4: Domain
+# Chapter 5: Domain Modeling (DDD)
 
-We have layers. Domain logic lives in the domain layer, separated from infrastructure and interface. The structure is solid. But the domain itself is still shallow.
+We have layers from Chapter 4. Domain logic lives in the domain layer, separated from infrastructure and interface. The structure is solid. But the domain itself is still shallow.
 
 **Terminology note:** This chapter uses three related but distinct terms:
 - **Domain** = the business problem we're solving (gym booking, scheduling, memberships)

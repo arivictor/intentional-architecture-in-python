@@ -19,16 +19,25 @@ Learn architecture by understanding how, when, and why to apply various architec
 
 * [Introduction](book/0-introduction.md)
 
-Chapters:
+### Part I: Foundations (Build the Mindset)
 
-* Chapter 1 [Philosophy](book/1-philosophy.md)
-* Chapter 2 [SOLID](book/2-solid.md)
-* Chapter 3 [Layers](book/3-layers.md)
-* Chapter 4 [Entities](book/4-entities.md)
-* Chapter 5 [Aggregates](book/5-aggregates.md)
-* Chapter 6 [Use Cases](book/6-use-cases.md)
-* Chapter 7 [Ports](book/7-ports.md)
-* Chapter 8 [Adapters](book/8-adapters.md)
+* Chapter 1: [Philosophy](book/1-philosophy.md)
+* Chapter 2: [SOLID Principles](book/2-solid.md)
+
+### Part II: Test-Driven Mindset
+
+* Chapter 3: [Test-Driven Development](book/3-tdd.md)
+
+### Part III: Architectural Patterns (Build the Structure)
+
+* Chapter 4: [Layers & Clean Architecture](book/4-layers.md)
+* Chapter 5: [Domain Modeling (DDD)](book/5-domain.md)
+* Chapter 6: [Use Cases & Application Layer](book/6-use-cases.md)
+* Chapter 7: [Ports & Adapters (Hexagonal Architecture)](book/7-ports-adapters.md)
+
+### Part IV: Integration (Bring It All Together)
+
+* Chapter 8: [Putting It All Together](book/8-putting-it-together.md)
 
 ## License
 

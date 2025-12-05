@@ -1,6 +1,6 @@
-# Chapter 5: Use Cases
+# Chapter 6: Use Cases & Application Layer
 
-We have a rich domain. `Member`, `FitnessClass`, and `Booking` entities enforce business rules. Value objects like `TimeSlot` and `EmailAddress` make invalid states impossible. The domain layer is solid.
+We have a rich domain from Chapter 5. `Member`, `FitnessClass`, and `Booking` entities enforce business rules. Value objects like `TimeSlot` and `EmailAddress` make invalid states impossible. The domain layer is solid.
 
 Now we need to build the application layer that orchestrates it.
 

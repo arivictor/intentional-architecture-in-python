@@ -1,6 +1,6 @@
-# Chapter 6: Ports and Adapters
+# Chapter 7: Ports & Adapters (Hexagonal Architecture)
 
-We have use cases. `BookClassUseCase` orchestrates the booking workflow. `CancelBookingUseCase` handles cancellations and refunds. They're clean. They're focused. They work.
+We have use cases from Chapter 6. `BookClassUseCase` orchestrates the booking workflow. `CancelBookingUseCase` handles cancellations and refunds. They're clean. They're focused. They work.
 
 But try to test them.
 
