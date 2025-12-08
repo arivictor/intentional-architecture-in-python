@@ -1,8 +1,8 @@
-# Chapter 3: Layers
+# Chapter 4: Layers & Clean Architecture
 
-We applied SOLID principles. Our code is now organized into focused classes with clear responsibilities. `Member`, `FitnessClass`, and `Booking` handle domain concepts. `EmailService` handles notifications. `PricingService` calculates prices. Each class has one reason to change.
+We've learned TDD in Chapter 3. We write tests first, which drives our design decisions. We've applied SOLID principles from Chapter 2. Our code is now organized into focused classes with clear responsibilities. `Member`, `FitnessClass`, and `Booking` handle domain concepts. `EmailService` handles notifications. `PricingService` calculates prices. Each class has one reason to change.
 
-The code is better. But it's still all in one file.
+The code is better. We have tests that let us refactor safely. But it's still all in one file.
 
 Then new requirements arrive:
 
@@ -607,6 +607,74 @@ class BookingService:
 ```
 
 Now `FitnessClass` handles the business rule (capacity check) and the state change (adding the booking). `BookingService` handles the coordination (notifications). Each layer does its job.
+
+## How TDD from Chapter 3 Led Us Here
+
+Remember the TDD cycle from Chapter 3? Red-Green-Refactor. Write a failing test, make it pass, clean it up.
+
+That process naturally pushes you toward layers. Here's how:
+
+**Tests demand testable code.** When you write a test for booking logic, you don't want to set up a database. You don't want to mock an SMTP server. You want to test the business rule: "A class at capacity cannot accept more bookings."
+
+```python
+# What TDD makes you want to write
+def test_full_class_rejects_booking():
+    fitness_class = FitnessClass(capacity=1)
+    fitness_class.add_booking(member_1)
+    
+    with pytest.raises(ClassFullException):
+        fitness_class.add_booking(member_2)
+```
+
+To write this test, `FitnessClass` can't know about databases. It can't depend on external services. **The test demands separation.** Domain logic in one layer, infrastructure in another.
+
+**Refactoring reveals boundaries.** In the Green phase, you make the test pass. Maybe you write this:
+
+```python
+def book_class(member_id, class_id):
+    conn = sqlite3.connect('gym.db')
+    cursor = conn.cursor()
+    cursor.execute("SELECT capacity, bookings FROM classes WHERE id = ?", (class_id,))
+    row = cursor.fetchone()
+    
+    if row[1] >= row[0]:
+        raise ValueError("Class is full")
+    
+    cursor.execute("INSERT INTO bookings ...", (member_id, class_id))
+    conn.commit()
+```
+
+The test passes. **Green.** But now you're in the Refactor phase. You look at this code and see:
+- Business logic (capacity check) tangled with database code
+- Can't test the capacity rule without a database
+- Can't change databases without changing the business logic
+
+TDD's refactor step is where you extract layers:
+
+```python
+# Domain layer - pure business logic
+class FitnessClass:
+    def add_booking(self, member):
+        if self.is_full():
+            raise ClassFullException("Class at capacity")
+        self._bookings.append(member)
+
+# Infrastructure layer - database details
+class FitnessClassRepository:
+    def save(self, fitness_class):
+        # Database code here
+```
+
+The test stays green. The design improves. **This is TDD driving architecture.**
+
+**Project Evolution Box:**
+- In Chapter 1, we had a simple script with everything in one file
+- In Chapter 2, we applied SOLID to create focused classes
+- In Chapter 3, we learned TDD and wrote tests first
+- Now in Chapter 4, those tests naturally pushed us toward layers
+- The change was easy because tests gave us a safety net
+
+This is the power of combining TDD with architectural thinking. TDD tells you when code needs structure. Layers give you that structure. Together, they create maintainable systems.
 
 ## When to Relax the Rules
 
