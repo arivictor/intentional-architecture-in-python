@@ -2,12 +2,7 @@
 
 We have layers from Chapter 4. Domain logic lives in the domain layer, separated from infrastructure and interface. The structure is solid. But the domain itself is still shallow.
 
-**Terminology note:** This chapter uses three related but distinct terms:
-- **Domain** = the business problem we're solving (gym booking, scheduling, memberships)
-- **Domain layer** = the architectural layer containing domain code (`domain/` directory)
-- **Domain model** = the entities, value objects, and services that represent the domain
-
-The domain (business) is modeled by the domain model (code), which lives in the domain layer (architecture).
+**Terminology Reminder:** As introduced in the Introduction, "domain" has three meanings in this book. This chapter focuses on enriching the domain model (code) that represents the domain (business problem) in the domain layer (architecture).
 
 New requirements arrive that expose this shallowness:
 
@@ -65,7 +60,7 @@ class BookingService:
 
 But now the business rules are scattered. Half the validation is here, some might be in the API layer, some in other services. There's no single source of truth about what makes a valid booking.
 
-**This is the problem with anemic domain models.** The objects hold data, but the logic lives everywhere else. Rules are duplicated. Invariants aren't protected. You can create invalid states.
+**This is the problem with anemic domain models** (introduced in Chapter 2). The objects hold data, but the logic lives everywhere else. Rules are duplicated. Invariants aren't protected. You can create invalid states.
 
 The code is asking for a richer domain.
 

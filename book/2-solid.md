@@ -168,6 +168,8 @@ class BookingService:
 
 Now `Member` represents member data. One responsibility. If you need to add a phone number or track membership duration, you change `Member`. Nothing else.
 
+**Note on Domain Models:** The `Member` class here is what's called an **anemic domain model**—it holds data but contains no business logic or behavior. All the logic lives in services. This is fine for simple systems, but as complexity grows, you'll want to move business rules into domain objects themselves (Chapter 5 explores this "rich domain model" approach). For now, separation by responsibility is the goal.
+
 Pricing lives in `PricingService`. If pricing rules change, that's the only place you look. Booking coordination lives in `BookingService`. Notifications live elsewhere.
 
 Each class has one axis of change. One reason to open the file. Testing becomes simpler because you can test pricing logic without spinning up email servers.

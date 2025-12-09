@@ -44,7 +44,14 @@ More importantly you will learn software architecture isn't a set of rules to fo
 
 Throughout this book, we'll build and evolve a gym class booking system. Members book fitness classes. Classes have capacity limits. Some members have premium subscriptions. Bookings can be cancelled. Notifications get sent. It's straightforward enough to understand in minutes, but rich enough to expose real architectural decisions.
 
-Why this domain? Three reasons.
+Why this **domain**? Three reasons.
+
+**A Note on Terminology:** You'll see the word "domain" used in three distinct ways throughout this book:
+- **Domain** (the business problem): The gym booking system—the real-world problem we're solving with code
+- **Domain layer** (architecture): The specific layer of code (`domain/` directory) that contains business logic
+- **Domain model** (code representation): The entities, value objects, and services that model the business
+
+The domain (problem) is modeled by the domain model (code), which lives in the domain layer (architecture). Context makes the meaning clear, but it's worth noting upfront.
 
 First, it's familiar. You don't need to learn a complex business domain before you can focus on architecture. Most people have used a booking system. You already understand the core concepts, so you can concentrate on how the code is organised, not what it's trying to do.
 
