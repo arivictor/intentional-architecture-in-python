@@ -373,6 +373,10 @@ members = {}
 classes = {}
 bookings = {}
 
+def generate_booking_id():
+    """Generate a unique booking ID."""
+    return f"B{len(bookings) + 1:03d}"
+
 def create_member(member_id, name, email, membership_type):
     """Register a new member."""
     members[member_id] = {
@@ -465,11 +469,11 @@ if __name__ == "__main__":
     create_class("C002", "HIIT Training", 15, "Wednesday", "18:00")
     
     # Make some bookings
-    book_class("B001", "M001", "C001")
-    book_class("B002", "M002", "C002")
+    booking1 = book_class(generate_booking_id(), "M001", "C001")
+    booking2 = book_class(generate_booking_id(), "M002", "C002")
     
     # Cancel a booking
-    cancel_booking("B001")
+    cancel_booking(booking1['id'])
 ```
 
 This code works. It's less than 120 lines. You can understand it in a few minutes. It handles members, classes, and bookings. It validates capacity and credits. For a proof of concept, it's exactly what you need.
