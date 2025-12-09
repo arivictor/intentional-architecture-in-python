@@ -389,7 +389,10 @@ class ProcessWaitlistUseCase:
         if not member:
             # Member no longer exists, remove from waitlist and try next
             self.waitlist_repository.remove(next_in_line)
-            return self.execute(class_id)  # Recursive call for next person
+            # Recursively process next person in waitlist
+            # NOTE: In production, consider iterative approach to avoid stack overflow
+            # with long waitlists, or add a max recursion depth parameter
+            return self.execute(class_id)
         
         # 5. Check if member still has credits
         try:
@@ -402,7 +405,9 @@ class ProcessWaitlistUseCase:
                 member.name,
                 fitness_class.name
             )
-            return self.execute(class_id)  # Recursive call for next person
+            # Recursively process next person in waitlist
+            # NOTE: See recursion note above
+            return self.execute(class_id)
         
         # 6. Book the member into the class
         try:
