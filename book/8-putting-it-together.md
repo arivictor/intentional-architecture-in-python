@@ -145,6 +145,13 @@ class MembershipType(Enum):
     BASIC = "basic"
     PREMIUM = "premium"
     
+    @property
+    def credits_per_month(self) -> int:
+        """Number of credits allocated per month for this membership type."""
+        if self == MembershipType.PREMIUM:
+            return 20
+        return 10  # BASIC
+    
     def can_join_waitlist(self) -> bool:
         """Only premium members can join waitlists."""
         return self == MembershipType.PREMIUM

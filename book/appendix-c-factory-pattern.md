@@ -9,7 +9,7 @@ Consider creating a new premium member:
 ```python
 # Somewhere in your application code
 email = EmailAddress("sarah@example.com")
-premium_membership = MembershipType("Premium", credits_per_month=20, price=50)
+premium_membership = MembershipType.PREMIUM
 member = Member("M001", "Sarah", email, premium_membership)
 ```
 
@@ -66,7 +66,7 @@ class Member:
     def create_premium(cls, member_id: str, name: str, email_str: str):
         """Factory method for creating premium members with bonus credits."""
         email = EmailAddress(email_str)
-        membership = MembershipType("Premium", credits_per_month=20, price=50)
+        membership = MembershipType.PREMIUM
         member = cls(member_id, name, email, membership)
         
         # Premium members get a 5-credit welcome bonus
@@ -78,7 +78,7 @@ class Member:
     def create_basic(cls, member_id: str, name: str, email_str: str):
         """Factory method for creating basic members."""
         email = EmailAddress(email_str)
-        membership = MembershipType("Basic", credits_per_month=10, price=25)
+        membership = MembershipType.BASIC
         return cls(member_id, name, email, membership)
     
     @classmethod
@@ -90,9 +90,9 @@ class Member:
         # Map legacy membership tier to new types
         tier = legacy_record.get("tier", "BASIC")
         if tier == "GOLD":
-            membership = MembershipType("Premium", credits_per_month=20, price=50)
+            membership = MembershipType.PREMIUM
         else:
-            membership = MembershipType("Basic", credits_per_month=10, price=25)
+            membership = MembershipType.BASIC
         
         member = cls(
             member_id=f"LEGACY-{legacy_id}",
@@ -617,11 +617,11 @@ class MemberBuilder:
         return self
     
     def with_premium_membership(self):
-        self._membership_type = MembershipType("Premium", 20, 50)
+        self._membership_type = MembershipType.PREMIUM
         return self
     
     def with_basic_membership(self):
-        self._membership_type = MembershipType("Basic", 10, 25)
+        self._membership_type = MembershipType.BASIC
         return self
     
     def with_initial_credits(self, credits: int):
@@ -678,7 +678,7 @@ class PremiumMembershipFactory(MembershipFactory):
         return Member.create_premium(member_id, name, email)
     
     def create_membership_type(self) -> MembershipType:
-        return MembershipType("Premium", 20, 50)
+        return MembershipType.PREMIUM
 
 
 class BasicMembershipFactory(MembershipFactory):
@@ -688,7 +688,7 @@ class BasicMembershipFactory(MembershipFactory):
         return Member.create_basic(member_id, name, email)
     
     def create_membership_type(self) -> MembershipType:
-        return MembershipType("Basic", 10, 25)
+        return MembershipType.BASIC
 ```
 
 This ensures that related objects (members and their membership types) are created consistently together.
