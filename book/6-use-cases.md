@@ -585,6 +585,409 @@ If you find yourself creating use cases that just call one method, you don't nee
 
 Use cases exist to coordinate complexity. If there's no complexity to coordinate, skip the use case.
 
+## Error Handling in Use Cases
+
+Use cases are where domain exceptions meet application concerns. Understanding how to handle exceptions properly in this layer is critical to building robust applications.
+
+### The Three Types of Exceptions
+
+Use cases deal with three categories of exceptions:
+
+1. **Domain exceptions:** Business rule violations (from the domain layer)
+2. **Infrastructure exceptions:** Technical failures (from repositories, external services)
+3. **Application exceptions:** Use case-specific errors (validation, not found, etc.)
+
+Each type requires different handling.
+
+### Handling Domain Exceptions
+
+Domain exceptions signal business rule violations. They're expected conditions that the business has defined. The use case should generally let these propagate to the interface layer, possibly after taking some application-level action:
+
+```python
+# application/use_cases/book_class.py
+from domain.exceptions import ClassFullException, InsufficientCreditsException
+
+class BookClassUseCase:
+    def execute(self, member_id: str, class_id: str) -> Booking:
+        member = self.member_repository.get_by_id(member_id)
+        if not member:
+            raise ValueError(f"Member {member_id} not found")
+        
+        fitness_class = self.class_repository.get_by_id(class_id)
+        if not fitness_class:
+            raise ValueError(f"Class {class_id} not found")
+        
+        try:
+            # Domain enforces business rules
+            member.deduct_credit()
+            fitness_class.add_booking(member_id)
+        except InsufficientCreditsException:
+            # Log for analytics, but let it propagate
+            logger.info(f"Booking attempt failed: member {member_id} has no credits")
+            raise  # Re-raise for interface layer to handle
+        except ClassFullException:
+            # Different business scenario - potentially take different action
+            logger.info(f"Booking attempt failed: class {class_id} is full")
+            # Could automatically add to waitlist here if that's a business rule
+            raise
+        
+        # Create booking and save
+        booking = Booking(generate_id(), member_id, class_id)
+        self.booking_repository.save(booking)
+        self.member_repository.save(member)
+        self.class_repository.save(fitness_class)
+        
+        # Send notification
+        self.notification_service.send_booking_confirmation(
+            member.email.value, member.name, fitness_class.name, fitness_class.time_slot
+        )
+        
+        return booking
+```
+
+**Key principles:**
+
+- **Don't suppress domain exceptions:** They represent legitimate business scenarios
+- **Log for observability:** Track which business rules are being triggered
+- **Re-raise for the interface layer:** Let the interface decide how to present the error
+- **Take application actions if needed:** Like logging, analytics, or cascading operations
+
+### Handling Infrastructure Exceptions
+
+Infrastructure exceptions signal technical failures—database down, network timeout, email service unavailable. These are different from business rule violations. The use case needs to decide: retry, compensate, or fail?
+
+```python
+# application/use_cases/book_class.py
+from domain.exceptions import InsufficientCreditsException, ClassFullException
+from infrastructure.exceptions import RepositoryException, NotificationException
+
+class BookClassUseCase:
+    def execute(self, member_id: str, class_id: str) -> Booking:
+        try:
+            # Load entities
+            member = self.member_repository.get_by_id(member_id)
+            fitness_class = self.class_repository.get_by_id(class_id)
+            
+            if not member:
+                raise ValueError(f"Member {member_id} not found")
+            if not fitness_class:
+                raise ValueError(f"Class {class_id} not found")
+            
+            # Execute domain logic
+            member.deduct_credit()
+            fitness_class.add_booking(member_id)
+            
+            # Create booking
+            booking = Booking(generate_id(), member_id, class_id)
+            
+        except RepositoryException as e:
+            # Infrastructure failed while reading - can't proceed
+            logger.error(f"Repository failure during booking: {e}")
+            raise ApplicationException("Unable to process booking due to system error")
+        
+        # Persist changes
+        try:
+            self.booking_repository.save(booking)
+            self.member_repository.save(member)
+            self.class_repository.save(fitness_class)
+        except RepositoryException as e:
+            # Critical: we've modified domain state but can't persist
+            logger.critical(f"Failed to persist booking {booking.id}: {e}")
+            # In a real system, this would trigger transaction rollback
+            raise ApplicationException("Booking could not be saved. Please try again.")
+        
+        # Send notification (non-critical - can fail)
+        try:
+            self.notification_service.send_booking_confirmation(
+                member.email.value, member.name, 
+                fitness_class.name, fitness_class.time_slot
+            )
+        except NotificationException as e:
+            # Log but don't fail the booking
+            logger.warning(f"Failed to send confirmation for booking {booking.id}: {e}")
+            # Booking succeeded even though notification failed
+        
+        return booking
+```
+
+**Key principles:**
+
+- **Distinguish critical from non-critical failures:** Database write failures are critical; notification failures aren't
+- **Log infrastructure errors with appropriate severity:** Critical for data persistence, warning for notifications
+- **Translate to application exceptions when appropriate:** Don't expose infrastructure details to the interface layer
+- **Consider compensation:** If part of the operation fails, can you roll back or retry?
+
+### Application-Level Validation
+
+Some validation doesn't belong in the domain (it's not a business rule) but needs to happen before domain logic executes:
+
+```python
+class BookClassUseCase:
+    def execute(self, member_id: str, class_id: str) -> Booking:
+        # Application-level validation
+        if not member_id or not member_id.strip():
+            raise ValueError("Member ID cannot be empty")
+        if not class_id or not class_id.strip():
+            raise ValueError("Class ID cannot be empty")
+        
+        # Check existence
+        member = self.member_repository.get_by_id(member_id)
+        if not member:
+            raise MemberNotFoundException(f"Member {member_id} not found")
+        
+        fitness_class = self.class_repository.get_by_id(class_id)
+        if not fitness_class:
+            raise ClassNotFoundException(f"Class {class_id} not found")
+        
+        # Check for duplicate booking
+        existing = self.booking_repository.find_by_member_and_class(member_id, class_id)
+        if existing and existing.status == BookingStatus.CONFIRMED:
+            raise DuplicateBookingException(
+                f"Member {member_id} already has a confirmed booking for class {class_id}"
+            )
+        
+        # Domain logic proceeds...
+        member.deduct_credit()
+        fitness_class.add_booking(member_id)
+        # ...
+```
+
+Define application exceptions for these cases:
+
+```python
+# application/exceptions.py
+
+class ApplicationException(Exception):
+    """Base exception for application layer errors."""
+    pass
+
+
+class ResourceNotFoundException(ApplicationException):
+    """Raised when a requested resource doesn't exist."""
+    pass
+
+
+class MemberNotFoundException(ResourceNotFoundException):
+    """Raised when a member is not found."""
+    
+    def __init__(self, member_id: str):
+        self.member_id = member_id
+        super().__init__(f"Member {member_id} not found")
+
+
+class ClassNotFoundException(ResourceNotFoundException):
+    """Raised when a class is not found."""
+    
+    def __init__(self, class_id: str):
+        self.class_id = class_id
+        super().__init__(f"Class {class_id} not found")
+
+
+class DuplicateBookingException(ApplicationException):
+    """Raised when attempting to create a duplicate booking."""
+    
+    def __init__(self, member_id: str, class_id: str):
+        self.member_id = member_id
+        self.class_id = class_id
+        super().__init__(
+            f"Member {member_id} already has a booking for class {class_id}"
+        )
+```
+
+**Key principles:**
+
+- **Create application-specific exceptions:** They're not domain exceptions (not business rules) but they're not infrastructure exceptions either
+- **Validate before domain logic:** Catch issues early before mutating domain state
+- **Provide structured context:** Exception attributes make error handling easier
+
+### Complete Error Handling Example
+
+Here's a use case with comprehensive error handling:
+
+```python
+# application/use_cases/book_class.py
+import logging
+from typing import Optional
+from uuid import uuid4
+
+from domain.entities import Member, FitnessClass, Booking
+from domain.exceptions import ClassFullException, InsufficientCreditsException
+from application.exceptions import (
+    MemberNotFoundException, 
+    ClassNotFoundException,
+    DuplicateBookingException
+)
+from infrastructure.exceptions import RepositoryException, NotificationException
+
+logger = logging.getLogger(__name__)
+
+
+class BookClassUseCase:
+    def __init__(self, member_repository, class_repository, 
+                 booking_repository, notification_service):
+        self.member_repository = member_repository
+        self.class_repository = class_repository
+        self.booking_repository = booking_repository
+        self.notification_service = notification_service
+    
+    def execute(self, member_id: str, class_id: str) -> Booking:
+        """
+        Book a member into a fitness class.
+        
+        Raises:
+            MemberNotFoundException: Member doesn't exist
+            ClassNotFoundException: Class doesn't exist
+            DuplicateBookingException: Member already booked
+            InsufficientCreditsException: Member has no credits (domain exception)
+            ClassFullException: Class at capacity (domain exception)
+            ApplicationException: System error occurred
+        """
+        # Input validation
+        if not member_id or not member_id.strip():
+            raise ValueError("Member ID is required")
+        if not class_id or not class_id.strip():
+            raise ValueError("Class ID is required")
+        
+        try:
+            # Load entities
+            member = self.member_repository.get_by_id(member_id)
+            if not member:
+                raise MemberNotFoundException(member_id)
+            
+            fitness_class = self.class_repository.get_by_id(class_id)
+            if not fitness_class:
+                raise ClassNotFoundException(class_id)
+            
+            # Check for duplicate
+            existing = self.booking_repository.find_by_member_and_class(
+                member_id, class_id
+            )
+            if existing and existing.status == BookingStatus.CONFIRMED:
+                raise DuplicateBookingException(member_id, class_id)
+                
+        except RepositoryException as e:
+            logger.error(f"Repository error loading data: {e}")
+            raise ApplicationException("Unable to load booking data")
+        
+        # Execute domain logic (may raise domain exceptions)
+        try:
+            member.deduct_credit()
+            fitness_class.add_booking(member_id)
+        except InsufficientCreditsException:
+            logger.info(f"Booking failed: insufficient credits for member {member_id}")
+            raise  # Re-raise domain exception
+        except ClassFullException:
+            logger.info(f"Booking failed: class {class_id} is full")
+            raise  # Re-raise domain exception
+        
+        # Create booking
+        booking = Booking(str(uuid4()), member_id, class_id)
+        
+        # Persist changes (critical path)
+        try:
+            self.booking_repository.save(booking)
+            self.member_repository.save(member)
+            self.class_repository.save(fitness_class)
+            logger.info(f"Booking created: {booking.id}")
+        except RepositoryException as e:
+            logger.critical(f"Failed to persist booking: {e}")
+            raise ApplicationException("Booking could not be saved")
+        
+        # Send notification (non-critical)
+        try:
+            self.notification_service.send_booking_confirmation(
+                member.email.value,
+                member.name,
+                fitness_class.name,
+                fitness_class.time_slot
+            )
+        except NotificationException as e:
+            # Log warning but don't fail the booking
+            logger.warning(
+                f"Failed to send confirmation for booking {booking.id}: {e}"
+            )
+        
+        return booking
+```
+
+This use case demonstrates:
+
+- **Input validation** before touching infrastructure
+- **Existence checks** with application-specific exceptions
+- **Repository exception handling** with appropriate logging
+- **Domain exception propagation** for business rule violations
+- **Critical vs. non-critical failure handling** (persist vs. notify)
+- **Comprehensive logging** for observability
+
+### Error Handling Anti-Patterns
+
+**Anti-pattern 1: Catching everything**
+
+```python
+# DON'T DO THIS
+def execute(self, member_id: str, class_id: str):
+    try:
+        # ... all the logic ...
+    except Exception as e:
+        logger.error(f"Booking failed: {e}")
+        return None  # Swallows all errors
+```
+
+This hides business rule violations, infrastructure failures, and bugs indiscriminately.
+
+**Anti-pattern 2: Converting domain exceptions to generic errors**
+
+```python
+# DON'T DO THIS
+try:
+    member.deduct_credit()
+except InsufficientCreditsException:
+    raise ValueError("Booking failed")  # Lost the business meaning
+```
+
+The interface layer can't distinguish "insufficient credits" from "invalid input" from "member not found."
+
+**Anti-pattern 3: Not distinguishing critical from non-critical failures**
+
+```python
+# DON'T DO THIS
+try:
+    self.booking_repository.save(booking)
+    self.notification_service.send_email(member.email)
+except Exception as e:
+    raise  # Treats email failure the same as database failure
+```
+
+If email fails, the booking should still succeed. This treats all failures equally.
+
+**Pattern: Proper exception handling**
+
+```python
+# DO THIS
+# Let domain exceptions propagate
+try:
+    member.deduct_credit()
+except InsufficientCreditsException:
+    logger.info(f"Credit check failed for member {member_id}")
+    raise  # Preserve the domain exception
+
+# Handle infrastructure critically
+try:
+    self.booking_repository.save(booking)
+except RepositoryException as e:
+    logger.critical(f"Failed to save booking: {e}")
+    raise ApplicationException("System error")
+
+# Handle non-critical gracefully
+try:
+    self.notification_service.send_email(member.email)
+except NotificationException as e:
+    logger.warning(f"Notification failed: {e}")
+    # Don't raise - booking succeeded
+```
+
+Different exceptions, different handling, appropriate to each concern.
+
 ## The Problem We Haven't Solved
 
 Look at this line from our use cases:

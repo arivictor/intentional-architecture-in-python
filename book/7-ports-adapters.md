@@ -2474,60 +2474,591 @@ Every layer has its place. Domain at the core. Application orchestrating. Infras
 
 ### Handling Errors in Adapters
 
-Adapters sit at the boundary between your application and external systems. Networks fail. Databases go down. APIs return errors. You need to handle this gracefully.
+Adapters sit at the boundary between your application and external systems. Networks fail. Databases go down. APIs return errors. Email servers timeout. Adapters need to handle all of this gracefully and translate failures into exceptions that the application layer can understand and respond to appropriately.
 
-The strategy depends on the error:
+#### The Three Categories of Adapter Errors
 
-**For domain violations, throw domain exceptions:**
+Adapters encounter three types of errors:
+
+1. **Infrastructure failures:** Database down, network timeout, disk full
+2. **Data quality issues:** Invalid data from database, API returning malformed responses
+3. **Domain validation failures:** Data that violates business rules when reconstructing domain objects
+
+Each category requires different handling.
+
+#### Infrastructure Exceptions
+
+Define infrastructure-specific exceptions that represent technical failures:
 
 ```python
-def get_by_id(self, member_id: str) -> Optional[Member]:
-    model = self.session.query(MemberModel).filter_by(id=member_id).first()
-    
-    if not model:
-        return None  # Not found is a valid state
-    
-    try:
-        return self._to_domain(model)
-    except ValueError as e:
-        # Database contains invalid data - this is a domain violation
-        raise DomainValidationError(f"Invalid member data: {e}")
+# infrastructure/exceptions.py
+
+class InfrastructureException(Exception):
+    """Base exception for all infrastructure-related errors."""
+    pass
+
+
+class RepositoryException(InfrastructureException):
+    """Raised when repository operations fail."""
+    pass
+
+
+class ConnectionException(RepositoryException):
+    """Raised when database connection fails."""
+    pass
+
+
+class PersistenceException(RepositoryException):
+    """Raised when saving or updating data fails."""
+    pass
+
+
+class NotificationException(InfrastructureException):
+    """Raised when notification delivery fails."""
+    pass
+
+
+class ExternalServiceException(InfrastructureException):
+    """Raised when external API calls fail."""
+    pass
 ```
 
-**For infrastructure failures, throw infrastructure exceptions:**
+These exceptions communicate *how* something failed (infrastructure), not *what* business rule was violated (domain).
+
+#### Handling Database Errors in Repository Adapters
+
+Repository adapters should catch database-specific exceptions and translate them to infrastructure exceptions:
 
 ```python
-def save(self, member: Member) -> None:
-    try:
+# infrastructure/persistence/sqlite_member_repository.py
+import sqlite3
+import logging
+from typing import Optional
+
+from domain.entities import Member
+from domain.value_objects import EmailAddress, MembershipType
+from domain.exceptions import InvalidEmailException
+from application.ports.repositories import MemberRepository
+from infrastructure.exceptions import RepositoryException, ConnectionException, PersistenceException
+
+logger = logging.getLogger(__name__)
+
+
+class SqliteMemberRepository(MemberRepository):
+    def __init__(self, db_path: str):
+        self.db_path = db_path
+        try:
+            self._create_table()
+        except sqlite3.Error as e:
+            logger.critical(f"Failed to initialize database: {e}")
+            raise ConnectionException(f"Cannot connect to database at {db_path}: {e}")
+    
+    def get_by_id(self, member_id: str) -> Optional[Member]:
+        """
+        Retrieve a member by ID.
+        
+        Returns:
+            Member if found, None otherwise
+            
+        Raises:
+            ConnectionException: If database connection fails
+            RepositoryException: If query fails for other reasons
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            cursor = conn.cursor()
+            
+            cursor.execute("SELECT * FROM members WHERE id = ?", (member_id,))
+            row = cursor.fetchone()
+            conn.close()
+            
+            if not row:
+                return None
+            
+            # Convert database row to domain object
+            try:
+                return self._to_domain(row)
+            except (ValueError, InvalidEmailException) as e:
+                # Database contains invalid data - this is a data quality issue
+                logger.error(f"Invalid member data in database for ID {member_id}: {e}")
+                # You could either return None or raise - depends on your error handling strategy
+                raise RepositoryException(
+                    f"Member {member_id} has invalid data in database: {e}"
+                )
+                
+        except sqlite3.OperationalError as e:
+            # Database file not accessible, permissions issue, etc.
+            logger.error(f"Database connection error: {e}")
+            raise ConnectionException(f"Cannot access database: {e}")
+        except sqlite3.DatabaseError as e:
+            # Corruption, malformed database, etc.
+            logger.error(f"Database error retrieving member {member_id}: {e}")
+            raise RepositoryException(f"Database error: {e}")
+    
+    def save(self, member: Member) -> None:
+        """
+        Persist a member to the database.
+        
+        Raises:
+            PersistenceException: If save operation fails
+            ConnectionException: If database connection fails
+        """
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            
+            # Check if member exists
+            cursor.execute("SELECT id FROM members WHERE id = ?", (member.id,))
+            exists = cursor.fetchone() is not None
+            
+            if exists:
+                # Update existing member
+                cursor.execute(
+                    """
+                    UPDATE members 
+                    SET name = ?, email = ?, credits = ?, 
+                        membership_type = ?, membership_price = ?, 
+                        membership_credits_per_month = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        member.name,
+                        member.email.value,
+                        member.credits,
+                        member.membership_type.name,
+                        member.membership_type.price,
+                        member.membership_type.credits_per_month,
+                        member.id
+                    )
+                )
+            else:
+                # Insert new member
+                cursor.execute(
+                    """
+                    INSERT INTO members 
+                    (id, name, email, credits, membership_type, 
+                     membership_price, membership_credits_per_month)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        member.id,
+                        member.name,
+                        member.email.value,
+                        member.credits,
+                        member.membership_type.name,
+                        member.membership_type.price,
+                        member.membership_type.credits_per_month
+                    )
+                )
+            
+            conn.commit()
+            conn.close()
+            
+        except sqlite3.IntegrityError as e:
+            # Unique constraint violation, foreign key violation, etc.
+            logger.error(f"Integrity error saving member {member.id}: {e}")
+            raise PersistenceException(
+                f"Cannot save member {member.id}: data integrity violation"
+            )
+        except sqlite3.OperationalError as e:
+            # Disk full, database locked, etc.
+            logger.error(f"Operational error saving member {member.id}: {e}")
+            raise ConnectionException(f"Database unavailable: {e}")
+        except sqlite3.DatabaseError as e:
+            # General database error
+            logger.error(f"Database error saving member {member.id}: {e}")
+            raise PersistenceException(f"Failed to save member: {e}")
+    
+    def _to_domain(self, row: sqlite3.Row) -> Member:
+        """
+        Convert a database row to a Member domain entity.
+        
+        This method can raise ValueError or domain exceptions if the data
+        is invalid. The caller should catch these and decide how to handle them.
+        """
+        # Reconstruct value objects - these may raise exceptions
+        email = EmailAddress(row['email'])  # May raise InvalidEmailException
+        membership = MembershipType(
+            name=row['membership_type'],
+            credits_per_month=row['membership_credits_per_month'],
+            price=row['membership_price']
+        )
+        
+        # Reconstruct the entity
+        member = Member(
+            member_id=row['id'],
+            name=row['name'],
+            email=email,
+            membership_type=membership
+        )
+        
+        # Restore state that isn't in the constructor
+        member._credits = row['credits']
+        
+        return member
+    
+    def _create_table(self) -> None:
+        """Create the members table if it doesn't exist."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
-        # ... SQL insert/update logic ...
+        
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS members (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                email TEXT UNIQUE NOT NULL,
+                credits INTEGER NOT NULL DEFAULT 0,
+                membership_type TEXT NOT NULL,
+                membership_price REAL NOT NULL,
+                membership_credits_per_month INTEGER NOT NULL
+            )
+            """
+        )
+        
         conn.commit()
         conn.close()
-    except sqlite3.Error as e:
-        raise RepositoryException(f"Failed to save member: {e}")
 ```
 
-**For transient errors, retry with exponential backoff:**
+**Key principles:**
+
+- **Catch database-specific exceptions:** SQLite raises `sqlite3.Error` and its subclasses
+- **Translate to infrastructure exceptions:** Application layer shouldn't know about SQLite
+- **Log with appropriate severity:** Critical for connection failures, error for data issues
+- **Distinguish failure types:** Connection failures vs. data corruption vs. constraint violations
+- **Handle data quality issues:** Invalid data from database should be logged and handled gracefully
+
+#### Handling Service Failures with Retries
+
+Service adapters (email, payment processors, external APIs) should implement retry logic for transient failures:
 
 ```python
-def _send_email(self, to_email: str, subject: str, body: str) -> None:
-    max_retries = 3
+# infrastructure/services/email_notification_service.py
+import smtplib
+import time
+import logging
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+from application.ports.services import NotificationService
+from infrastructure.exceptions import NotificationException
+
+logger = logging.getLogger(__name__)
+
+
+class SMTPNotificationService(NotificationService):
+    def __init__(self, smtp_host: str, smtp_port: int, 
+                 username: str, password: str, from_email: str,
+                 max_retries: int = 3):
+        self.smtp_host = smtp_host
+        self.smtp_port = smtp_port
+        self.username = username
+        self.password = password
+        self.from_email = from_email
+        self.max_retries = max_retries
     
-    for attempt in range(max_retries):
-        try:
-            with smtplib.SMTP(self.smtp_host, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.username, self.password)
-                server.send_message(msg)
-            return  # Success
-        except smtplib.SMTPException as e:
-            if attempt == max_retries - 1:
-                raise NotificationException(f"Failed after {max_retries} attempts: {e}")
-            time.sleep(2 ** attempt)  # Exponential backoff
+    def send_booking_confirmation(self, email: str, name: str,
+                                   class_name: str, time_slot) -> None:
+        """
+        Send booking confirmation email with retry logic.
+        
+        Raises:
+            NotificationException: If email fails after all retries
+        """
+        subject = f"Booking Confirmed: {class_name}"
+        body = f"""
+        Hi {name},
+        
+        Your booking for {class_name} has been confirmed!
+        
+        Class Details:
+        - Name: {class_name}
+        - Day: {time_slot.day.name}
+        - Time: {time_slot.start_time.strftime('%H:%M')} - {time_slot.end_time.strftime('%H:%M')}
+        
+        We look forward to seeing you there!
+        
+        Best regards,
+        Your Fitness Team
+        """
+        
+        self._send_email_with_retry(email, subject, body)
+    
+    def _send_email_with_retry(self, to_email: str, subject: str, body: str) -> None:
+        """
+        Send email with exponential backoff retry logic.
+        
+        Transient errors (network timeouts, temporary server unavailability) are retried.
+        Permanent errors (invalid email, authentication failure) fail immediately.
+        """
+        last_exception = None
+        
+        for attempt in range(self.max_retries):
+            try:
+                self._send_email(to_email, subject, body)
+                if attempt > 0:
+                    logger.info(
+                        f"Email sent successfully on attempt {attempt + 1} to {to_email}"
+                    )
+                return  # Success
+                
+            except smtplib.SMTPAuthenticationError as e:
+                # Permanent error - wrong credentials
+                logger.error(f"SMTP authentication failed: {e}")
+                raise NotificationException(f"Email authentication failed: {e}")
+                
+            except smtplib.SMTPRecipientsRefused as e:
+                # Permanent error - invalid recipient
+                logger.error(f"Invalid email recipient {to_email}: {e}")
+                raise NotificationException(f"Invalid email address {to_email}: {e}")
+                
+            except (smtplib.SMTPServerDisconnected, smtplib.SMTPConnectError, 
+                    TimeoutError, ConnectionError) as e:
+                # Transient error - retry
+                last_exception = e
+                if attempt < self.max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.warning(
+                        f"Email send failed (attempt {attempt + 1}/{self.max_retries}), "
+                        f"retrying in {wait_time}s: {e}"
+                    )
+                    time.sleep(wait_time)
+                else:
+                    logger.error(
+                        f"Email send failed after {self.max_retries} attempts: {e}"
+                    )
+                    
+            except smtplib.SMTPException as e:
+                # Other SMTP errors
+                last_exception = e
+                logger.error(f"SMTP error sending to {to_email}: {e}")
+                if attempt < self.max_retries - 1:
+                    time.sleep(2 ** attempt)
+        
+        # All retries exhausted
+        raise NotificationException(
+            f"Failed to send email to {to_email} after {self.max_retries} attempts: "
+            f"{last_exception}"
+        )
+    
+    def _send_email(self, to_email: str, subject: str, body: str) -> None:
+        """Internal method to send a single email (no retry logic)."""
+        msg = MIMEMultipart()
+        msg['From'] = self.from_email
+        msg['To'] = to_email
+        msg['Subject'] = subject
+        msg.attach(MIMEText(body, 'plain'))
+        
+        with smtplib.SMTP(self.smtp_host, self.smtp_port, timeout=10) as server:
+            server.starttls()
+            server.login(self.username, self.password)
+            server.send_message(msg)
 ```
 
-The use cases decide how to handle these exceptions. The adapters just raise them appropriately.
+**Key principles:**
+
+- **Distinguish transient from permanent failures:** Retry network errors, don't retry authentication failures
+- **Implement exponential backoff:** Wait longer between each retry (1s, 2s, 4s)
+- **Set reasonable retry limits:** 3 attempts is usually enough for transient failures
+- **Log retry attempts:** Track which notifications are struggling
+- **Raise infrastructure exceptions:** Let application layer decide if notification failure is critical
+
+#### Converting Infrastructure Errors to Domain Exceptions
+
+Sometimes infrastructure errors reveal domain constraint violations. When this happens, convert to domain exceptions:
+
+```python
+# infrastructure/persistence/sqlite_member_repository.py
+from domain.exceptions import DuplicateEmailException
+
+class SqliteMemberRepository(MemberRepository):
+    def save(self, member: Member) -> None:
+        try:
+            # ... save logic ...
+            cursor.execute("INSERT INTO members (...) VALUES (...)", ...)
+            conn.commit()
+            
+        except sqlite3.IntegrityError as e:
+            # Check if this is a unique constraint violation on email
+            if 'UNIQUE constraint failed: members.email' in str(e):
+                logger.warning(f"Duplicate email attempted: {member.email.value}")
+                # This is actually a domain constraint violation
+                raise DuplicateEmailException(
+                    f"A member with email {member.email.value} already exists"
+                )
+            else:
+                # Other integrity errors are infrastructure issues
+                logger.error(f"Database integrity error: {e}")
+                raise PersistenceException(f"Data integrity error: {e}")
+```
+
+**When to convert:**
+
+- **Database unique constraints represent business rules:** Duplicate email is a domain concept
+- **Foreign key violations represent domain relationships:** Can't book non-existent class
+- **Data type mismatches reveal validation failures:** String too long is a domain constraint
+
+**When not to convert:**
+
+- **Connection failures are infrastructure:** Database down isn't a business rule violation
+- **Timeout errors are infrastructure:** Network slow isn't a domain concept
+- **Disk full errors are infrastructure:** Storage issues aren't business logic
+
+#### Circuit Breaker Pattern for External Services
+
+For frequently-called external services, implement a circuit breaker to avoid cascading failures:
+
+```python
+# infrastructure/services/payment_service.py
+import time
+import logging
+from enum import Enum
+from typing import Optional
+
+from application.ports.services import PaymentService
+from infrastructure.exceptions import ExternalServiceException
+
+logger = logging.getLogger(__name__)
+
+
+class CircuitState(Enum):
+    CLOSED = "closed"  # Normal operation
+    OPEN = "open"      # Failing, reject requests
+    HALF_OPEN = "half_open"  # Testing if service recovered
+
+
+class CircuitBreaker:
+    """
+    Circuit breaker to prevent cascading failures when external service is down.
+    
+    - CLOSED: Normal operation, requests go through
+    - OPEN: Service failing, reject immediately without trying
+    - HALF_OPEN: Testing if service recovered, allow one request
+    """
+    
+    def __init__(self, failure_threshold: int = 5, timeout: int = 60):
+        self.failure_threshold = failure_threshold
+        self.timeout = timeout  # Seconds before trying again
+        self.failure_count = 0
+        self.state = CircuitState.CLOSED
+        self.last_failure_time: Optional[float] = None
+    
+    def call(self, func, *args, **kwargs):
+        """Execute function with circuit breaker protection."""
+        if self.state == CircuitState.OPEN:
+            # Check if timeout has passed
+            if time.time() - self.last_failure_time >= self.timeout:
+                logger.info("Circuit breaker entering HALF_OPEN state")
+                self.state = CircuitState.HALF_OPEN
+            else:
+                # Still in timeout period, reject immediately
+                raise ExternalServiceException(
+                    "Circuit breaker OPEN - service unavailable"
+                )
+        
+        try:
+            result = func(*args, **kwargs)
+            # Success - reset failure count
+            if self.state == CircuitState.HALF_OPEN:
+                logger.info("Circuit breaker closing - service recovered")
+                self.state = CircuitState.CLOSED
+            self.failure_count = 0
+            return result
+            
+        except Exception as e:
+            # Failure
+            self.failure_count += 1
+            self.last_failure_time = time.time()
+            
+            if self.failure_count >= self.failure_threshold:
+                logger.error(
+                    f"Circuit breaker opening after {self.failure_count} failures"
+                )
+                self.state = CircuitState.OPEN
+            
+            raise
+
+
+class StripePaymentService(PaymentService):
+    def __init__(self, api_key: str):
+        self.api_key = api_key
+        self.circuit_breaker = CircuitBreaker(failure_threshold=5, timeout=60)
+    
+    def charge_membership(self, member_id: str, amount: float) -> str:
+        """
+        Charge a member for their membership with circuit breaker protection.
+        
+        Raises:
+            ExternalServiceException: If payment fails or circuit is open
+        """
+        try:
+            return self.circuit_breaker.call(
+                self._charge_stripe, member_id, amount
+            )
+        except ExternalServiceException:
+            raise  # Circuit breaker rejection
+        except Exception as e:
+            logger.error(f"Payment failed for member {member_id}: {e}")
+            raise ExternalServiceException(f"Payment processing failed: {e}")
+    
+    def _charge_stripe(self, member_id: str, amount: float) -> str:
+        """Actual Stripe API call."""
+        # In real implementation, call Stripe API
+        import stripe
+        stripe.api_key = self.api_key
+        
+        try:
+            charge = stripe.Charge.create(
+                amount=int(amount * 100),  # Stripe uses cents
+                currency='usd',
+                description=f'Membership for {member_id}'
+            )
+            return charge.id
+        except stripe.error.CardError as e:
+            # Card was declined - this is a domain issue, not infrastructure
+            raise PaymentDeclinedException(f"Card declined: {e.user_message}")
+        except (stripe.error.APIConnectionError, stripe.error.APIError) as e:
+            # Infrastructure failure
+            raise ExternalServiceException(f"Stripe API error: {e}")
+```
+
+**Key principles:**
+
+- **Fail fast when service is down:** Don't wait for timeout if we know it's failing
+- **Automatically recover:** Test if service is back up after timeout period
+- **Protect your application:** Prevent one failing service from bringing down your entire system
+- **Log state transitions:** Track when circuit opens/closes for monitoring
+
+#### Error Handling Summary for Infrastructure Layer
+
+**Infrastructure exceptions represent technical failures:**
+- Database connection errors
+- Network timeouts
+- Disk full errors
+- External API failures
+
+**Domain exceptions represent business rule violations:**
+- Duplicate email (unique constraint from database)
+- Invalid credit card (from payment processor)
+- Email address format (from validation during reconstruction)
+
+**Application exceptions represent application-level concerns:**
+- Resource not found
+- Unauthorized access
+- Invalid request format
+
+**Adapters should:**
+
+1. **Catch infrastructure-specific exceptions** (SQLite, SMTP, Stripe errors)
+2. **Translate to infrastructure exceptions** (RepositoryException, NotificationException)
+3. **Convert to domain exceptions when appropriate** (duplicate email → DuplicateEmailException)
+4. **Log with appropriate severity** (critical for failures, warning for retries)
+5. **Implement retry logic for transient failures** (network errors, temporary unavailability)
+6. **Fail fast for permanent errors** (authentication failures, invalid input)
+7. **Use circuit breakers for external services** (prevent cascading failures)
+
+The use cases (application layer) decide how to handle these exceptions. The adapters just raise them appropriately, with enough context for the application to make informed decisions.
 
 ### When to Create New Adapters
 

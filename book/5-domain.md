@@ -937,6 +937,219 @@ Each exception represents a distinct business scenario. Your application layer c
 
 Keep domain exceptions in the domain layer. They're part of the business logic, not infrastructure concerns.
 
+#### Organizing Domain Exceptions
+
+As your domain grows, you'll accumulate exceptions. Organize them in a single `exceptions.py` file in the domain layer:
+
+```python
+# domain/exceptions.py
+
+class DomainException(Exception):
+    """Base exception for all domain-related errors."""
+    pass
+
+
+# Booking-related exceptions
+class BookingException(DomainException):
+    """Base exception for booking-related errors."""
+    pass
+
+
+class ClassFullException(BookingException):
+    """Raised when attempting to book a class that's at capacity."""
+    pass
+
+
+class BookingNotCancellableException(BookingException):
+    """Raised when attempting to cancel a booking within the restricted timeframe."""
+    pass
+
+
+class MemberAlreadyBookedException(BookingException):
+    """Raised when a member tries to book the same class twice."""
+    pass
+
+
+# Member-related exceptions
+class MemberException(DomainException):
+    """Base exception for member-related errors."""
+    pass
+
+
+class InsufficientCreditsException(MemberException):
+    """Raised when a member has no credits remaining."""
+    pass
+
+
+class InvalidEmailException(MemberException):
+    """Raised when an email address is invalid."""
+    pass
+
+
+# Validation exceptions
+class ValidationException(DomainException):
+    """Raised when domain object validation fails."""
+    pass
+
+
+class InvalidCapacityException(ValidationException):
+    """Raised when class capacity is outside valid range."""
+    pass
+
+
+class InvalidTimeSlotException(ValidationException):
+    """Raised when a time slot is invalid (e.g., start after end)."""
+    pass
+```
+
+This hierarchy serves several purposes:
+
+**Type-based error handling:** You can catch `BookingException` to handle all booking-related errors, or catch specific exceptions like `ClassFullException` for precise handling.
+
+**Clear communication:** The exception name tells you exactly what business rule was violated. No ambiguity. No message parsing.
+
+**Domain language:** These exceptions use terminology from the business domain. Product managers and developers speak the same language.
+
+**Organized structure:** All domain exceptions inherit from `DomainException`, making it easy to distinguish domain errors from infrastructure or technical errors.
+
+#### When to Use Domain Exceptions vs. Validation
+
+There's a distinction between validation and business rule violations:
+
+**Use validation for structural correctness:**
+
+```python
+class EmailAddress:
+    def __init__(self, value: str):
+        if not value or '@' not in value:
+            raise ValueError("Invalid email address")
+        self._value = value.lower().strip()
+```
+
+This is validation. The email format is structurally invalid. It's not a business rule violation—it's a data quality issue. `ValueError` is appropriate here because this is about the validity of input data.
+
+**Use domain exceptions for business rule violations:**
+
+```python
+class Member:
+    def deduct_credit(self):
+        if self.credits <= 0:
+            raise InsufficientCreditsException(
+                f"Member {self._name} has no credits remaining"
+            )
+        self._credits -= 1
+```
+
+This is a business rule. The member exists. The data is valid. But the business doesn't allow bookings without credits. This deserves a domain exception because it represents a meaningful business scenario.
+
+**Guideline:** If the problem is "the data is malformed," use `ValueError`. If the problem is "the operation violates a business rule," use a domain exception.
+
+#### Exception Messages and Context
+
+Good domain exceptions provide context. Not just "what went wrong," but enough information to understand why and what to do about it:
+
+```python
+class ClassFullException(BookingException):
+    """Raised when attempting to book a class that's at capacity."""
+    
+    def __init__(self, class_name: str, capacity: int, current_bookings: int):
+        self.class_name = class_name
+        self.capacity = capacity
+        self.current_bookings = current_bookings
+        super().__init__(
+            f"Class '{class_name}' is at full capacity "
+            f"({current_bookings}/{capacity} bookings)"
+        )
+
+
+class InsufficientCreditsException(MemberException):
+    """Raised when a member has no credits remaining."""
+    
+    def __init__(self, member_name: str, member_id: str, required: int = 1):
+        self.member_name = member_name
+        self.member_id = member_id
+        self.required = required
+        super().__init__(
+            f"Member {member_name} ({member_id}) has insufficient credits. "
+            f"Required: {required}, Available: 0"
+        )
+```
+
+Now when you catch these exceptions, you have structured data to work with:
+
+```python
+try:
+    member.deduct_credit()
+except InsufficientCreditsException as e:
+    # You have structured context
+    print(f"Member {e.member_name} needs more credits")
+    print(f"Send purchase link to member ID: {e.member_id}")
+```
+
+The exception carries enough context for appropriate handling without needing to query other systems or parse strings.
+
+#### Domain Exceptions in Practice
+
+Here's how domain exceptions flow through the layers (we'll see this in detail in Chapters 6 and 7):
+
+**Domain layer:** Throws exceptions when business rules are violated.
+
+```python
+# domain/entities/member.py
+def deduct_credit(self):
+    if self.credits <= 0:
+        raise InsufficientCreditsException(
+            self._name, 
+            self._id, 
+            required=1
+        )
+    self._credits -= 1
+```
+
+**Application layer:** Catches domain exceptions and decides how to respond.
+
+```python
+# application/use_cases/book_class.py
+try:
+    member.deduct_credit()
+    fitness_class.add_booking(member_id)
+except InsufficientCreditsException as e:
+    # Business rule violated - handle it appropriately
+    notification_service.notify_insufficient_credits(e.member_id)
+    raise  # Re-raise for interface layer
+except ClassFullException as e:
+    # Different business scenario - different response
+    notification_service.notify_class_full(member_id, e.class_name)
+    raise
+```
+
+**Interface layer:** Translates domain exceptions into user-facing messages or HTTP responses.
+
+```python
+# interface/api/booking_controller.py
+try:
+    booking = book_class_use_case.execute(member_id, class_id)
+    return {"status": "success", "booking_id": booking.id}
+except ClassFullException as e:
+    return {
+        "status": "error",
+        "error_code": "CLASS_FULL",
+        "message": f"Sorry, {e.class_name} is full ({e.current_bookings}/{e.capacity})",
+        "suggestion": "Would you like to join the waitlist?"
+    }, 400
+except InsufficientCreditsException as e:
+    return {
+        "status": "error",
+        "error_code": "INSUFFICIENT_CREDITS",
+        "message": f"You need more credits to book this class",
+        "suggestion": "Purchase more credits to continue"
+    }, 402
+```
+
+Each layer handles exceptions appropriately for its concern. The domain throws them. The application coordinates them. The interface presents them.
+
+This pattern—from domain exception to application coordination to interface presentation—will be demonstrated in detail in the following chapters. For now, understand that domain exceptions are the vocabulary your application uses to communicate business rule violations across all layers.
+
 ### Putting It All Together
 
 Let's see how all these pieces work together. Here's a complete flow: a member wants to book a class.
