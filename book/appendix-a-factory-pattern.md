@@ -410,14 +410,14 @@ class TestMemberFactoryMethods:
         assert member.email.value == "sarah@example.com"
         # Premium base credits (20) + welcome bonus (5) = 25
         assert member.credits == 25
-        assert member.membership_type.name == "Premium"
+        assert member.membership_type == MembershipType.PREMIUM
     
     def test_create_basic_no_bonus(self):
         """Basic members should not get a welcome bonus."""
         member = Member.create_basic("M002", "John", "john@example.com")
         
         assert member.credits == 10  # Just base credits, no bonus
-        assert member.membership_type.name == "Basic"
+        assert member.membership_type == MembershipType.BASIC
     
     def test_from_legacy_data_maps_gold_to_premium(self):
         """Legacy GOLD tier should map to Premium membership."""
@@ -431,7 +431,7 @@ class TestMemberFactoryMethods:
         
         assert member.id == "LEGACY-L123"
         assert member.name == "Jane Doe"
-        assert member.membership_type.name == "Premium"
+        assert member.membership_type == MembershipType.PREMIUM
         # No welcome bonus for imported members
         assert member.credits == 20
     
@@ -445,7 +445,7 @@ class TestMemberFactoryMethods:
         
         member = Member.from_legacy_data("L456", legacy_record)
         
-        assert member.membership_type.name == "Basic"
+        assert member.membership_type == MembershipType.BASIC
         assert member.credits == 10
     
     def test_from_legacy_data_defaults_to_basic_when_tier_missing(self):
@@ -457,7 +457,7 @@ class TestMemberFactoryMethods:
         
         member = Member.from_legacy_data("L789", legacy_record)
         
-        assert member.membership_type.name == "Basic"
+        assert member.membership_type == MembershipType.BASIC
 ```
 
 No mocks needed. No infrastructure. Pure domain tests that verify creation logic.
@@ -583,7 +583,7 @@ class TestMemberCreationIntegration:
         assert len(member.id) > 10
         
         # Should have premium membership with welcome bonus
-        assert member.membership_type.name == "Premium"
+        assert member.membership_type == MembershipType.PREMIUM
         assert member.credits == 25
 ```
 

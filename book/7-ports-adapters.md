@@ -1016,7 +1016,7 @@ def test_booking_a_class_successfully():
     
     # Create test data
     email = EmailAddress("sarah@example.com")
-    membership = MembershipType("Premium", credits_per_month=10, price=50)
+    membership = MembershipType.PREMIUM
     member = Member("M001", "Sarah", email, membership)
     
     capacity = ClassCapacity(15)
@@ -1065,7 +1065,7 @@ def test_booking_fails_when_class_is_full():
     
     # Create a member
     email = EmailAddress("sarah@example.com")
-    membership = MembershipType("Premium", credits_per_month=10, price=50)
+    membership = MembershipType.PREMIUM
     member = Member("M001", "Sarah", email, membership)
     member_repo.save(member)
     
@@ -1434,7 +1434,7 @@ class JsonMemberRepository(MemberRepository):
             'name': member.name,
             'email': member.email.value,
             'credits': member.credits,
-            'membership_type': member.membership_type.name,
+            'membership_type': member.membership_type.display_name,
             'membership_price': member.membership_type.price,
             'membership_credits_per_month': member.membership_type.credits_per_month
         }
@@ -1512,7 +1512,7 @@ class SqliteMemberRepository(MemberRepository):
                     member.name,
                     member.email.value,
                     member.credits,
-                    member.membership_type.name,
+                    member.membership_type.display_name,
                     member.membership_type.price,
                     member.membership_type.credits_per_month,
                     member.id
@@ -1532,7 +1532,7 @@ class SqliteMemberRepository(MemberRepository):
                     member.name,
                     member.email.value,
                     member.credits,
-                    member.membership_type.name,
+                    member.membership_type.display_name,
                     member.membership_type.price,
                     member.membership_type.credits_per_month
                 )
@@ -2626,7 +2626,7 @@ class SqliteMemberRepository(MemberRepository):
                         member.name,
                         member.email.value,
                         member.credits,
-                        member.membership_type.name,
+                        member.membership_type.display_name,
                         member.membership_type.price,
                         member.membership_type.credits_per_month,
                         member.id
@@ -2646,7 +2646,7 @@ class SqliteMemberRepository(MemberRepository):
                         member.name,
                         member.email.value,
                         member.credits,
-                        member.membership_type.name,
+                        member.membership_type.display_name,
                         member.membership_type.price,
                         member.membership_type.credits_per_month
                     )
