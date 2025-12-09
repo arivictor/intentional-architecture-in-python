@@ -58,14 +58,16 @@ By the end, you won't just know the patterns, you'll understand when to apply th
 * Chapter 8: [Putting It All Together](book/8-putting-it-together.md)
 * Chapter 9: [Conclusion](book/9-conclusion.md)
 
-### Appendices (Advanced Topics)
+### Appendices 
 
-* Appendix A: [Factory Pattern for Complex Creation](book/appendix-a-factory-pattern.md)
-* Appendix A: [Repository Query Patterns](book/appendix-a-repository-query-patterns.md)
-* Appendix A: [Validation Strategies Across Layers](book/appendix-a-validation-strategies.md)
-* Appendix A: [Domain Events](book/appendix-a-domain-events.md)
-* Appendix B: [Unit of Work Pattern](book/appendix-b-unit-of-work.md)
+#### Advanced Topics
+
 * Appendix A: [Aggregate Design & Boundary Decisions](book/appendix-a-aggregate-design.md)
+* Appendix B: [Domain Events](book/appendix-b-domain-events.md)
+* Appendix C: [Factory Pattern for Complex Creation](book/appendix-c-factory-pattern.md)
+* Appendix D: [Repository Query Patterns](book/appendix-d-repository-query-patterns.md)
+* Appendix E: [Validation Strategies Across Layers](book/appendix-e-validation-strategies.md)
+* Appendix F: [Unit of Work Pattern](book/appendix-f-unit-of-work.md)
 
 ## License
 
