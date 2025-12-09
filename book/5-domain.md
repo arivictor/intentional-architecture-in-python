@@ -525,27 +525,29 @@ Start with this structure. Refactor to fully nested (subdirectories per aggregat
 
 ## Aggregates
 
-In the first section of this chapter, we built the foundation: entities with identity and behaviour, value objects that make invalid states impossible. We have `Member`, `FitnessClass`, `TimeSlot`, `EmailAddress`, and `ClassCapacity`. Each one knows its own rules and protects its own invariants.
+You've built entities. You've built value objects. `Member` protects its email. `FitnessClass` enforces capacity. `EmailAddress` won't let you create an invalid address. Each object guards its own rules.
 
-But real business logic doesn't live in isolated objects. Members book classes. Classes have capacity limits that bookings must respect. Cancellations depend on time remaining before class starts. Multiple classes can't occupy the same room simultaneously.
+But business logic doesn't stay inside neat boxes.
 
-These are rules that span multiple objects. They require coordination. They need consistency boundaries.
+A member books a class. The class has capacity limits. Cancellations depend on timing. Multiple classes can't use the same room. These rules span objects. They need coordination.
 
-This chapter introduces aggregates and domain services—the patterns that let you model complex business logic while keeping your domain clean and focused. Aggregates define consistency boundaries. Domain services handle logic that doesn't naturally belong to any single entity. Together, they complete the picture of a rich domain model.
+This is where aggregates come in. They're consistency boundaries. They answer the question: when multiple objects need to change together, who's in charge?
 
-By the end of this chapter, you'll have a complete domain layer. One that enforces business rules, maintains consistency, and speaks the language of the business—without any dependency on databases, frameworks, or external services.
+This section shows you how to define aggregates that enforce business rules across related objects. You'll see when to use them, how to design their boundaries, and how they work with domain services to keep your domain model clean.
+
+By the end, you'll have a complete domain layer. One that enforces business rules, maintains consistency, and speaks the language of the business—without leaking database details or framework dependencies.
 
 ### Consistency Boundaries
 
-Aggregates are clusters of entities and value objects treated as a single unit for data changes.
+Entities protect themselves. But business logic spans multiple objects. How do you maintain consistency? Aggregates solve this.
 
-So far we have entities: `Member`, `FitnessClass`. We have value objects: `EmailAddress`, `TimeSlot`, `ClassCapacity`. But how do these relate? How do you ensure consistency when multiple objects need to change together?
+You have entities: `Member`, `FitnessClass`. You have value objects: `EmailAddress`, `TimeSlot`, `ClassCapacity`. But how do they relate? When a member books a class, both objects need to change together. How do you ensure they stay consistent?
 
-This is where aggregates come in.
+An aggregate is a boundary. One entity is the root. Everything inside the aggregate goes through that root. The root enforces the rules.
 
-An aggregate is a boundary around one or more objects. One entity is the root—the entry point. All access to objects inside the aggregate goes through the root. The root enforces invariants for the entire aggregate.
+Think of it like a team. The root is the team lead. You don't go directly to team members. You go through the lead. They coordinate. They make sure everyone's in sync.
 
-In our gym system, a `Booking` is an aggregate. It's the combination of a member booking a specific class at a specific time. The booking has its own identity, its own lifecycle, and rules that span both member and class.
+In our gym system, `Booking` is an aggregate. It represents a member's commitment to attend a class. The booking has identity. It has a lifecycle. It enforces rules that span both member and class.
 
 Here's the `Booking` aggregate:
 
@@ -633,21 +635,19 @@ class BookingNotCancellableException(Exception):
     pass
 ```
 
-The `Booking` aggregate encapsulates the booking lifecycle. It knows the cancellation rules. It tracks status transitions. It enforces that you can't cancel a booking that's already cancelled, or mark a cancelled booking as attended.
+The `Booking` aggregate owns the booking lifecycle. It knows when you can cancel. It tracks state changes. It stops you from cancelling a cancelled booking or marking a cancelled booking as attended.
 
-The aggregate is the consistency boundary. When you modify a booking, all changes happen through the booking's own methods. You don't reach in and modify its internal state directly. The aggregate protects its invariants.
+That's the consistency boundary. All changes go through the booking's methods. You don't reach in and modify state directly. The aggregate guards its rules.
 
-Notice that `Booking` references `Member` and `FitnessClass` by ID, not by direct object reference. This is intentional. Aggregates should be small. They should reference other aggregates by identity, not by holding them in memory. This keeps the boundaries clear and avoids loading entire object graphs when you only need a booking.
+Notice something important: `Booking` stores member and class IDs, not objects. This is deliberate. Aggregates should be small. Reference other aggregates by ID, not by holding them in memory. This keeps boundaries clear. It avoids loading massive object graphs when you just need one booking.
 
-If you need both the booking and the member, you load them separately and coordinate them at the application layer. The domain enforces rules within each aggregate. The application coordinates across aggregates.
+Need both the booking and the member? Load them separately. Coordinate at the application layer. The domain enforces rules within each aggregate. The application coordinates across them.
 
 #### Understanding the Booking Aggregate Boundary
 
-Let's be explicit about what makes `Booking` an aggregate and how it differs from other entities in our system.
+Why is `Booking` an aggregate? What makes it different from other entities?
 
-**Why `Booking` is an aggregate:**
-
-The `Booking` represents a complete business transaction—a member's commitment to attend a class. It has its own lifecycle that's independent of both the `Member` and the `FitnessClass`:
+`Booking` represents a complete business transaction—a member's commitment to show up. It has its own lifecycle, independent of both `Member` and `FitnessClass`:
 
 ```
 ┌─────────────────────────────────────────────┐
@@ -675,37 +675,36 @@ The `Booking` represents a complete business transaction—a member's commitment
 └─────────────────────────────────────────────┘
 ```
 
-**Key characteristics:**
+**What makes this an aggregate:**
 
-1. **Independent Identity**: A booking can exist even if the class is cancelled or the member leaves
-2. **Own Lifecycle**: Bookings transition through states (CONFIRMED → CANCELLED/ATTENDED/NO_SHOW)
-3. **Business Rules**: The 2-hour cancellation policy belongs to the booking, not to the member or class
-4. **References by ID**: Storing only IDs prevents tight coupling and keeps the aggregate small
+1. **Independent Identity**: Bookings exist even if the class gets cancelled or the member leaves
+2. **Own Lifecycle**: Transitions through states (CONFIRMED → CANCELLED/ATTENDED/NO_SHOW)
+3. **Business Rules**: The 2-hour cancellation window belongs to the booking, not member or class
+4. **References by ID**: Storing IDs only prevents tight coupling and keeps the aggregate small
 
-**Contrast with `FitnessClass._bookings`:**
+**Wait, doesn't `FitnessClass` have a `_bookings` list?**
 
-You might notice that `FitnessClass` has a `_bookings` list that stores member IDs. This is a **denormalised cache for capacity checking**, not the authoritative source of booking data. Here's why:
+Yes, and that's intentional. `FitnessClass._bookings` is a denormalized cache. It answers one question: "Is this class full?" That's it.
 
-- `FitnessClass._bookings` exists only to answer: "Is this class full?"
-- The true booking state (status, timestamps, cancellation) lives in `Booking` aggregates
-- When a booking is cancelled, the `Booking` aggregate changes status, and we remove the member ID from `FitnessClass._bookings`
-- This is a pragmatic trade-off: we accept some data duplication to avoid loading all bookings just to check capacity
+The real booking data—status, timestamps, cancellation—lives in `Booking` aggregates. When you cancel a booking, the `Booking` changes status, and we remove the member ID from `FitnessClass._bookings`.
 
-**Design Decision:**
+This is a pragmatic trade-off. We duplicate some data to avoid loading all bookings just to check capacity.
 
-We could have made `Booking` a child within a larger `FitnessClass` aggregate, but that would force us to load the entire class and all its bookings every time we want to cancel a single booking. By making `Booking` its own aggregate, we can:
+**Why not make `Booking` part of `FitnessClass`?**
 
-- Cancel bookings without loading the class
-- Query booking history for a member without loading classes
-- Handle concurrent bookings more efficiently (different aggregates can be modified independently)
+We could. But that would force us to load the entire class and all its bookings every time we cancel one booking. By making `Booking` its own aggregate:
 
-The application layer coordinates between these aggregates when necessary, but each aggregate maintains its own consistency.
+- You can cancel bookings without loading the class
+- You can query a member's booking history without loading classes
+- Concurrent bookings work better (different aggregates can change independently)
+
+The application layer coordinates. Each aggregate stays independent.
 
 #### The Waitlist Entity
 
-When a class is full, members need a way to queue up for available spots. This is where the waitlist comes in.
+Classes fill up. Members need a way to queue for open spots. Enter the waitlist.
 
-A `WaitlistEntry` is a simple entity that tracks a member's position in line for a specific class. It has identity (its own ID), references other aggregates by ID (member and class), and tracks when the entry was created:
+`WaitlistEntry` is simple. It tracks position in line. It has its own ID. It references member and class by ID. It knows when it was created:
 
 ```python
 from datetime import datetime
@@ -744,11 +743,11 @@ class WaitlistEntry:
         return self._added_at
 ```
 
-Unlike `Booking`, which enforces complex cancellation rules and status transitions, `WaitlistEntry` is deliberately simple. It's a record of intent: "This member wants to join this class when space becomes available."
+`Booking` enforces complex rules—cancellation windows, status transitions. `WaitlistEntry` doesn't. It's deliberately simple. It records intent: "This member wants in when space opens."
 
-The business rules around waitlists—who gets priority, how long entries remain valid, whether members can be on multiple waitlists—live in the application layer or in domain services, not in this entity. The entity just represents the fact that someone is waiting.
+Waitlist rules—priority, expiration, multiple waitlists—live elsewhere. Application layer. Domain services. Not here. This entity just represents one thing: someone waiting.
 
-Notice how it references `Member` and `FitnessClass` by ID, following the same pattern as `Booking`. This keeps aggregates independent. The waitlist processing logic will load and coordinate these objects as needed, but the entity itself stays focused on representing a single concept: a person waiting for a class.
+Notice the pattern: references by ID, same as `Booking`. Aggregates stay independent. The processing logic loads and coordinates as needed. But the entity stays focused: a person waiting for a class.
 
 ### Domain Services: Logic That Doesn't Fit
 
