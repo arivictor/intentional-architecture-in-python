@@ -137,6 +137,8 @@ We'll separate our code into four layers:
 
 **Important nuance about infrastructure:** Infrastructure doesn't directly depend on domain entities. Instead, the domain defines abstractions (like repository interfaces), and infrastructure implements them. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
 
+> **Forward Reference:** We introduce the repository concept here, but the full implementation using ports and adapters comes in Chapter 7. For now, understand that repositories mediate between domain and data storage.
+
 This rule is what makes layers work. Domain never imports from infrastructure. Application calls domain methods and uses infrastructure through abstractions. When we violated this by putting database code in `Member`, we broke the rule and created coupling.
 
 ## Refactoring Into Layers
@@ -397,6 +399,11 @@ class MemberRepository:
     """
     Repository pattern: Mediates between domain and data storage.
     Keeps persistence logic out of domain entities.
+    
+    Note: We introduce the repository concept here, but the full 
+    implementation using ports and adapters comes in Chapter 7. 
+    For now, understand that repositories mediate between domain 
+    and data storage.
     """
     def save(self, member: Member):
         conn = sqlite3.connect('gym.db')
@@ -538,6 +545,9 @@ class Member:
 # Infrastructure layer - infrastructure/member_repository.py
 import sqlite3
 
+# Note: We introduce the repository concept here, but the full implementation 
+# using ports and adapters comes in Chapter 7. For now, understand that 
+# repositories mediate between domain and data storage.
 class MemberRepository:
     def save(self, member):
         conn = sqlite3.connect('gym.db')
