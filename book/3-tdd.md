@@ -281,6 +281,8 @@ def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
     )
 ```
 
+**Evolution Note:** We've changed `self.credits` to `self._credits` with a property. This encapsulation lets us add logic (like expiry checks) in Chapter 5 without changing the interface. Tests still pass because the public API (`member.credits`) remains the same.
+
 Run the tests. Still green. But now the business rules live in the domain objects. `Member` enforces credit rules. `FitnessClass` enforces capacity rules. The booking function just orchestrates.
 
 This is TDD driving design. The tests forced us to think about the interface. The refactoring step let us improve the structure. The safety net let us move code around confidently.
