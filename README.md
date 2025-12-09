@@ -40,8 +40,9 @@ Learn architecture by understanding how, when, and why to apply various architec
 * Chapter 8: [Putting It All Together](book/8-putting-it-together.md)
 * Chapter 9: [Conclusion](book/9-conclusion.md)
 
-### Appendix: Advanced Topics
+### Appendices (Advanced Topics)
 
+* Appendix A: [Repository Query Patterns](book/appendix-a-repository-query-patterns.md)
 * Appendix A: [Validation Strategies Across Layers](book/appendix-a-validation-strategies.md)
 * Appendix A: [Domain Events](book/appendix-a-domain-events.md)
 * Appendix B: [Unit of Work Pattern](book/appendix-b-unit-of-work.md)
