@@ -36,7 +36,7 @@ One of the SOLID principles stating that high-level modules should not depend on
 This term has three distinct meanings in this book:
 - **Domain (business problem)**: The real-world problem being solved with code (e.g., the gym booking system)
 - **Domain layer (architecture)**: The specific layer of code that contains business logic, isolated from infrastructure and interfaces
-- **Domain model (code representation)**: The entities, value objects, and services that model the business concepts
+- **Domain model (code representation)**: The entities, value objects, and domain services that model the business concepts
 
 ### Domain-Driven Design (DDD)
 An approach to software development that focuses on modeling complex business logic by creating a rich domain model. Emphasizes collaboration with domain experts, using ubiquitous language, and employing patterns like entities, value objects, aggregates, and domain services to capture business rules in code.
@@ -116,7 +116,7 @@ The scope of operations that must succeed together or fail together—all or not
 ## U
 
 ### Ubiquitous Language
-A shared vocabulary between developers and domain experts. The code uses the same terms and concepts that business people use. Classes, methods, and variables reflect real business concepts rather than technical implementations. This reduces translation overhead and makes the codebase accessible to domain experts.
+A shared vocabulary between developers and domain experts. The code uses the same terms and concepts that business people use. Classes, methods, and variables reflect real business concepts rather than technical implementations. This reduces translation overhead and makes the codebase accessible to domain experts. For example, using `Member` and `FitnessClass` instead of `User` and `Event` because gym staff naturally think in terms of members and classes.
 
 ### Unit of Work
 A pattern that maintains a list of objects affected by a business transaction and coordinates the writing of changes. It ensures that multiple repository operations succeed together or fail together, providing transactional consistency across multiple aggregates.
