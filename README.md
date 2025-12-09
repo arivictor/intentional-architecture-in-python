@@ -1,11 +1,29 @@
 # Intentional Architecture in Python
-
-> DRAFT NOTE: A layered approch toa rchitecture where we learn and apply the minimal required architecture to build something viable. The appendix chapters then build upon the main book with advanced topics.
-
+A Pragmatic Guide to Layers, Patterns, and Design Decisions
 
 ---
 
-Learn architecture by understanding how, when, and why to apply various architectural patterns and philosophies. Understand how they work together to create a minimal yet viable architecural pattern you can easily apply to small and large projects.
+You know how to write code that works. But somewhere between "it runs" and "it's maintainable," things fall apart. Functions grow unwieldy. Classes become tangled. Changes that should be simple ripple across your codebase. You've heard terms like Clean Architecture and Domain-Driven Design, but when you tried to learn them, the gap between theory and practice felt impossibly wide.
+
+This book bridges that gap.
+
+**Intentional Architecture in Python** teaches you to think like an architect. Not by memorising patterns, but by understanding the decisions behind them. You'll learn to recognise what needs to change in your system and protect it from what doesn't. To separate business logic from technical details. To write code that's easier to test, modify, and reason about.
+
+Through a practical running example—a gym class booking system—you'll discover:
+- **Why architecture matters** and when "good enough" beats "perfect"
+- **SOLID principles** that actually make sense in context
+- **Test-Driven Development** as a design tool, not just a testing practice
+- **Clean Architecture layers** and how to organize code across them
+- **Domain modeling** that reflects real business rules
+- **Use cases** that orchestrate without contaminating domain logic
+- **Ports and adapters** that let you swap infrastructure without touching core code
+
+Every chapter builds on the last. Every pattern is motivated by a real problem. Every "rule" comes with a "when not to use it."
+
+By the end, you won't just know the patterns, you'll understand when to apply them, when to skip them, and how to make architectural decisions with intention.
+
+**This book is for developers who want to move beyond tutorials and understand the fundamentals that last.**
+
 
 <p align="center">
   <img src="cover.png" alt="book cover - intentional architecture in python" width="300">
