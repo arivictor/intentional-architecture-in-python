@@ -43,6 +43,7 @@ Learn architecture by understanding how, when, and why to apply various architec
 ### Appendices (Advanced Topics)
 
 * Appendix A: [Repository Query Patterns](book/appendix-a-repository-query-patterns.md)
+* Appendix A: [Aggregate Design & Boundary Decisions](book/appendix-a-aggregate-design.md)
 
 ## License
 
