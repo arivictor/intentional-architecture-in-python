@@ -278,7 +278,13 @@ class FitnessClass:
         self._bookings.append(member_id)
     
     def add_to_waitlist(self, member: Member) -> None:
-        """Add a member to the waitlist if they're eligible."""
+        """
+        Add a member to the waitlist if they're eligible.
+        
+        Note: Takes full Member object (not just ID) because we need to check
+        member.can_join_waitlist() to enforce business rules. Only premium
+        members can join waitlists.
+        """
         if not self.is_full():
             raise ValueError("Class is not full; no need for waitlist")
         
