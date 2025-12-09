@@ -73,7 +73,13 @@ import re
 
 @dataclass(frozen=True)
 class EmailAddress:
-    """Value object that guarantees email validity."""
+    """
+    Value object that guarantees email validity.
+    
+    Using frozen=True makes the object immutable after creation.
+    __post_init__ runs after __init__ to validate the data before
+    the object becomes frozen.
+    """
     value: str
     
     def __post_init__(self):
@@ -87,7 +93,12 @@ class EmailAddress:
 
 @dataclass(frozen=True)
 class Credits:
-    """Value object that prevents negative credits."""
+    """
+    Value object that prevents negative credits.
+    
+    Immutable by design - you can't modify credits directly.
+    Instead, methods return new Credits instances.
+    """
     amount: int
     
     def __post_init__(self):
@@ -140,7 +151,12 @@ from typing import List
 from .value_objects import EmailAddress, Credits
 
 class Member:
-    """Domain entity with enforced invariants."""
+    """
+    Domain entity with enforced invariants.
+    
+    Note: Unlike the immutable value objects above, entities are mutable
+    but protect their state through private attributes and controlled methods.
+    """
     
     def __init__(
         self,
@@ -734,7 +750,7 @@ async def validation_error_handler(
 
 async def not_found_handler(
     request: Request,
-    exc: Union[MemberNotFoundError, ClassNotFoundError]
+    exc: MemberNotFoundError | ClassNotFoundError
 ):
     """Handle resource not found (application layer)."""
     return JSONResponse(
@@ -747,7 +763,7 @@ async def not_found_handler(
 
 async def domain_error_handler(
     request: Request,
-    exc: Union[InsufficientCreditsError, ClassFullError, DomainValidationError]
+    exc: InsufficientCreditsError | ClassFullError | DomainValidationError
 ):
     """Handle domain rule violations."""
     # Log for business metrics
