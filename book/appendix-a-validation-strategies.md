@@ -388,6 +388,7 @@ Here's interface validation with FastAPI (similar patterns apply to Flask, Djang
 ```python
 # interface/api/schemas.py
 from pydantic import BaseModel, Field, validator, UUID4
+# Note: For Pydantic v2, use field_validator instead of validator
 from datetime import datetime
 from typing import Optional
 
@@ -428,12 +429,14 @@ class CreateMemberRequest(BaseModel):
     
     @validator('name')
     def name_must_not_be_whitespace(cls, v):
+        """Validate that name is not just whitespace."""
         if not v.strip():
             raise ValueError('Name cannot be only whitespace')
         return v.strip()
     
     @validator('membership_type')
     def membership_type_must_be_valid(cls, v):
+        """Validate that membership type is one of the allowed values."""
         valid_types = ['basic', 'premium', 'pay-per-class']
         if v not in valid_types:
             raise ValueError(
