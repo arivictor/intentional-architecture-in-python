@@ -178,39 +178,27 @@ Here's `Member` evolved from Chapter 3 into a proper entity:
 ```python
 from datetime import datetime, timedelta
 from typing import Optional
+from enum import Enum
 
 
-class MembershipType:
-    def __init__(self, name: str, credits_per_month: int, price: float):
-        if not name:
-            raise ValueError("Membership type name cannot be empty")
-        if credits_per_month < 0:
-            raise ValueError("Credits per month cannot be negative")
-        if price < 0:
-            raise ValueError("Price cannot be negative")
-        
-        self._name = name
-        self._credits_per_month = credits_per_month
-        self._price = price
-    
-    @property
-    def name(self) -> str:
-        return self._name
+class MembershipType(Enum):
+    BASIC = "basic"
+    PREMIUM = "premium"
     
     @property
     def credits_per_month(self) -> int:
-        return self._credits_per_month
+        """Number of credits allocated per month for this membership type."""
+        if self == MembershipType.PREMIUM:
+            return 20
+        return 10  # BASIC
     
     @property
     def price(self) -> float:
-        return self._price
-    
-    def __eq__(self, other):
-        if not isinstance(other, MembershipType):
-            return False
-        return (self._name == other._name and 
-                self._credits_per_month == other._credits_per_month and
-                self._price == other._price)
+        """Monthly price for this membership type."""
+        if self == MembershipType.PREMIUM:
+            return 50.0
+        return 25.0  # BASIC
+
 
 
 class EmailAddress:
@@ -1156,7 +1144,7 @@ from datetime import datetime, time, timedelta
 
 # Create value objects
 email = EmailAddress("sarah@example.com")
-premium_membership = MembershipType("Premium", credits_per_month=20, price=50)
+premium_membership = MembershipType.PREMIUM
 capacity = ClassCapacity(15)
 time_slot = TimeSlot(DayOfWeek.MONDAY, time(10, 0), time(11, 0))
 
@@ -1282,7 +1270,7 @@ We've built a complete domain layer. Not just data containers, but a rich model 
 
 **Entities** have identity. `Member` and `FitnessClass` are distinguished by their IDs, not their attributes. They change over time while maintaining continuity. They protect their own invariants—you can't create a member without an ID, and you can't modify credits arbitrarily.
 
-**Value objects** are defined by their attributes. `TimeSlot`, `EmailAddress`, `ClassCapacity`, and `MembershipType` have no identity. Two time slots with the same day and times are identical. Value objects are immutable and make invalid states impossible to construct.
+**Value objects** are defined by their attributes. `TimeSlot`, `EmailAddress`, and `ClassCapacity` are value objects with no identity. Two time slots with the same day and times are identical. `MembershipType` is an enum-based value object with predefined types (BASIC, PREMIUM) and associated behavior. Value objects are immutable and make invalid states impossible to construct.
 
 **Aggregates** define consistency boundaries. `Booking` is an aggregate root that manages the booking lifecycle independently of `Member` and `FitnessClass`. It references other aggregates by ID, keeping boundaries clear and preventing tightly coupled object graphs. The aggregate enforces its invariants—you can't cancel a booking less than 2 hours before class time, and you can't mark a cancelled booking as attended.
 
