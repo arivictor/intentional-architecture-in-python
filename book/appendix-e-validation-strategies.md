@@ -1,4 +1,4 @@
-# Appendix A: Validation Strategies Across Layers
+# Appendix E: Validation Strategies Across Layers
 
 You've built a layered architecture. Domain, application, infrastructure, and interface—each with clear responsibilities. The structure is solid. But then you encounter validation, and the boundaries blur.
 

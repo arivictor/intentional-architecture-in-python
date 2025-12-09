@@ -1,4 +1,4 @@
-# Appendix A: Domain Events
+# Appendix B: Domain Events
 
 You've built a clean architecture. The domain enforces business rules. Use cases orchestrate workflows. Ports decouple infrastructure. Tests give you confidence to change.
 

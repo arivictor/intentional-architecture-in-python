@@ -1,4 +1,4 @@
-# Appendix B: Unit of Work Pattern
+# Appendix F: Unit of Work Pattern
 
 We've been handwaving something important throughout Chapters 6 and 7. Look at this use case again:
 

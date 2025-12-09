@@ -1,4 +1,4 @@
-# Appendix A: Repository Query Patterns
+# Appendix D: Repository Query Patterns
 
 Remember the repository ports from Chapter 7? Clean interfaces that define what the application needs from persistence:
 

@@ -1,4 +1,4 @@
-# Appendix A: Factory Pattern for Complex Creation
+# Appendix C: Factory Pattern for Complex Creation
 
 ## The Problem: Creating Domain Objects Is Complex
 
