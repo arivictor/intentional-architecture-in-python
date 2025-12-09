@@ -685,7 +685,7 @@ class FitnessClassRepository:
 
 The test stays green. The design improves. **This is TDD driving architecture.**
 
-**Project Evolution Box:**
+**Project Evolution:**
 - In Chapter 1, we had a simple script with everything in one file
 - In Chapter 2, we applied SOLID to create focused classes
 - In Chapter 3, we learned TDD and wrote tests first
