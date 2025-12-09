@@ -2,15 +2,11 @@
 
 You don't have to be a software architect to find yourself architecting software.
 
-Architecture happens the moment the code stops being trivial. Most developers stumble into architecture the same way they stumble onto a solution: by accident. One day you're writing a script, and the next you're responsible for a growing system with expectations, users, and consequences. Along the way you had to make decisions about how to organise code, where logic belongs, and how different parts of the system interact.
+Architecture happens the moment your code stops being trivial. Most developers stumble into architecture the same way they stumble onto a solution: by accident. One day you're writing a script, and the next you're responsible for a growing system with expectations, users, and consequences. Along the way you had to make decisions about how to organise code, where logic belongs, and how different parts of the system interact.
 
-> Every programmer becomes an architect, whether they like it or not. The moment you make decisions that shape how a system grows, you’re architecting.
+Once you’re in that position, intentionally or not, the problems change. That is where architecture helps.
 
-Once you’re in that position, intentionally or not, the problems change. You can write code that works. But something happens as projects grow. A script becomes a file. A file becomes ten files. Ten files then become a codebase you’re afraid to touch. Changes break things in unexpected places. Tests feel impossible. Logic lives everywhere and nowhere at once. It becomes almost impossible to walk someone through how the code works because even you don’t fully understand it anymore.
-
-That is where architecture helps.
-
-You have probably heard the terms: Clean Architecture, Domain-Driven Design, SOLID principles. They sound like answers. But when you tried to learn them, the concepts felt distant. Abstract. Too hard to connect to the code you write every day. Many patterns seem designed for massive enterprise systems with teams of dozens of developers.
+You have probably heard the terms: Clean Architecture, Domain-Driven Design, SOLID principles. They sound like answers. But when you tried to learn them, the concepts felt distant, too hard to connect to the code you write every day. Many patterns seem designed for massive enterprise systems with teams of dozens of developers.
 
 While I was trying to learn better programming, the gap between my spaghetti phases and the well-architected projects I admired felt impossibly wide. I couldn’t figure out how to cross it. I’d look at clean, intentional codebases and feel lost. The structure made sense to someone, just not to me. Why this separation and not another? What were the developers seeing or asking that I wasn’t?
 
