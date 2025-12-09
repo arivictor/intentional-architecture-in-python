@@ -72,3 +72,5 @@ They come from decades of people wrestling with the same problems: Robert C. Mar
 By the end, you’ll have intuition for where code belongs and why. Not because a book told you so, but because it aligns with how you think about systems. You’ll see that software architecture is philosophy applied to code.
 
 Take what resonates. Leave what doesn’t.
+
+If you encounter unfamiliar terms as you read, refer to **Appendix Z: Glossary** for definitions of all architectural concepts used throughout this book.
