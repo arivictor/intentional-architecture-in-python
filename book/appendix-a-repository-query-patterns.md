@@ -500,7 +500,7 @@ class Specification(ABC, Generic[T]):
         pass
     
     @abstractmethod
-    def to_sql(self) -> tuple[str, tuple]:
+    def to_sql(self) -> Tuple[str, Tuple]:
         """Returns (WHERE clause, parameters) for SQL queries."""
         pass
 ```
@@ -512,7 +512,7 @@ class ActiveBookingSpecification(Specification[Booking]):
     def is_satisfied_by(self, booking: Booking) -> bool:
         return booking.status == BookingStatus.ACTIVE
     
-    def to_sql(self) -> tuple[str, tuple]:
+    def to_sql(self) -> Tuple[str, Tuple]:
         return ("status = ?", (BookingStatus.ACTIVE.value,))
 
 
@@ -523,7 +523,7 @@ class BookingForClassSpecification(Specification[Booking]):
     def is_satisfied_by(self, booking: Booking) -> bool:
         return booking.class_id == self.class_id
     
-    def to_sql(self) -> tuple[str, tuple]:
+    def to_sql(self) -> Tuple[str, Tuple]:
         return ("class_id = ?", (self.class_id,))
 
 
@@ -536,7 +536,7 @@ class AndSpecification(Specification[T]):
         return (self.left.is_satisfied_by(entity) and 
                 self.right.is_satisfied_by(entity))
     
-    def to_sql(self) -> tuple[str, tuple]:
+    def to_sql(self) -> Tuple[str, Tuple]:
         left_clause, left_params = self.left.to_sql()
         right_clause, right_params = self.right.to_sql()
         clause = f"({left_clause} AND {right_clause})"
@@ -687,7 +687,8 @@ class SqliteBookingRepository(BookingRepository):
             sql += " WHERE " + " AND ".join(conditions)
         
         if query.limit is not None:
-            sql += f" LIMIT {query.limit}"
+            sql += " LIMIT ?"
+            params.append(query.limit)
         
         cursor = self._conn.execute(sql, tuple(params))
         return [self._row_to_booking(row) for row in cursor.fetchall()]
@@ -1130,7 +1131,8 @@ class SqliteBookingRepository(BookingRepository):
             sql += " WHERE " + " AND ".join(conditions)
         
         if query.limit is not None:
-            sql += f" LIMIT {query.limit}"
+            sql += " LIMIT ?"
+            params.append(query.limit)
         
         cursor = self._conn.execute(sql, tuple(params))
         return [self._row_to_booking(row) for row in cursor.fetchall()]
