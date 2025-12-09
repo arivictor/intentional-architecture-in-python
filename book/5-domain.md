@@ -688,7 +688,7 @@ Yes, and that's intentional. `FitnessClass._bookings` is a denormalized cache. I
 
 The real booking data—status, timestamps, cancellation—lives in `Booking` aggregates. When you cancel a booking, the `Booking` changes status, and we remove the member ID from `FitnessClass._bookings`.
 
-This is a pragmatic trade-off. We duplicate some data to avoid loading all bookings just to check capacity.
+This is a pragmatic tradeoff. We duplicate some data to avoid loading all bookings just to check capacity.
 
 **Why not make `Booking` part of `FitnessClass`?**
 
