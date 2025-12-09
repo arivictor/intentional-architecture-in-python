@@ -40,6 +40,10 @@ Learn architecture by understanding how, when, and why to apply various architec
 * Chapter 8: [Putting It All Together](book/8-putting-it-together.md)
 * Chapter 9: [Conclusion](book/9-conclusion.md)
 
+### Appendices (Advanced Topics)
+
+* Appendix A: [Repository Query Patterns](book/appendix-a-repository-query-patterns.md)
+
 ## License
 
 This book is licensed under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/).
