@@ -720,6 +720,7 @@ Here's how to handle each type:
 
 ```python
 # interface/api/error_handlers.py
+from typing import Union
 from fastapi import Request, status
 from fastapi.responses import JSONResponse
 from pydantic import ValidationError
@@ -750,7 +751,7 @@ async def validation_error_handler(
 
 async def not_found_handler(
     request: Request,
-    exc: MemberNotFoundError | ClassNotFoundError
+    exc: Union[MemberNotFoundError, ClassNotFoundError]
 ):
     """Handle resource not found (application layer)."""
     return JSONResponse(
@@ -763,7 +764,7 @@ async def not_found_handler(
 
 async def domain_error_handler(
     request: Request,
-    exc: InsufficientCreditsError | ClassFullError | DomainValidationError
+    exc: Union[InsufficientCreditsError, ClassFullError, DomainValidationError]
 ):
     """Handle domain rule violations."""
     # Log for business metrics
