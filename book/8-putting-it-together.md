@@ -39,18 +39,19 @@ We begin with tests that define the behavior we want.
 import pytest
 from domain.member import Member, MembershipType
 from domain.fitness_class import FitnessClass
+from domain.value_objects import EmailAddress
 from domain.exceptions import ClassFullException
 
 def test_premium_member_joins_waitlist_when_class_full():
     """Premium members can join waitlist when class is at capacity."""
-    member = Member.create(
+    member = Member(
         member_id="M001",
         name="Alice Johnson",
-        email="alice@example.com",
+        email=EmailAddress("alice@example.com"),
         membership_type=MembershipType.PREMIUM
     )
     
-    fitness_class = FitnessClass.create(
+    fitness_class = FitnessClass(
         class_id="C001",
         name="Yoga Flow",
         capacity=2,
@@ -71,14 +72,14 @@ def test_premium_member_joins_waitlist_when_class_full():
 
 def test_basic_member_cannot_join_waitlist():
     """Basic members get an error when trying to book a full class."""
-    member = Member.create(
+    member = Member(
         member_id="M002",
         name="Bob Smith",
-        email="bob@example.com",
+        email=EmailAddress("bob@example.com"),
         membership_type=MembershipType.BASIC
     )
     
-    fitness_class = FitnessClass.create(
+    fitness_class = FitnessClass(
         class_id="C001",
         name="Yoga Flow",
         capacity=1,
@@ -96,14 +97,14 @@ def test_basic_member_cannot_join_waitlist():
 
 def test_cancellation_promotes_waitlisted_member():
     """When someone cancels, the first waitlisted member gets the spot."""
-    premium_member = Member.create(
+    premium_member = Member(
         member_id="M001",
         name="Alice",
-        email="alice@example.com",
+        email=EmailAddress("alice@example.com"),
         membership_type=MembershipType.PREMIUM
     )
     
-    fitness_class = FitnessClass.create(
+    fitness_class = FitnessClass(
         class_id="C001",
         name="Yoga",
         capacity=1,
@@ -153,43 +154,53 @@ This is a value object. It represents a concept from the domain. It enforces rul
 
 ### Entity: Member (Enhanced)
 
+We're building on the `Member` entity from Chapter 5. Recall that it uses encapsulated attributes with properties for controlled access:
+
 ```python
 # domain/member.py
-from dataclasses import dataclass
 from typing import Optional
+from datetime import datetime, timedelta
 from domain.value_objects import EmailAddress
 
-@dataclass
 class Member:
     """A gym member who can book classes."""
     
-    id: str
-    name: str
-    email: EmailAddress
-    membership_type: MembershipType
-    _credits: int
+    def __init__(self, member_id: str, name: str, email: EmailAddress, 
+                 membership_type: MembershipType, credits: Optional[int] = None):
+        if not member_id:
+            raise ValueError("Member ID is required")
+        if not name or not name.strip():
+            raise ValueError("Member name cannot be empty")
+        
+        self._id = member_id
+        self._name = name
+        self._email = email
+        self._membership_type = membership_type
+        self._credits = credits if credits is not None else membership_type.credits_per_month
     
-    @staticmethod
-    def create(member_id: str, name: str, email: str, 
-               membership_type: MembershipType, credits: int = 10) -> 'Member':
-        """Factory method to create a valid member."""
-        if not name:
-            raise ValueError("Name cannot be empty")
-        
-        if credits < 0:
-            raise ValueError("Credits cannot be negative")
-        
-        return Member(
-            id=member_id,
-            name=name,
-            email=EmailAddress(email),
-            membership_type=membership_type,
-            _credits=credits
-        )
+    @property
+    def id(self) -> str:
+        return self._id
+    
+    @property
+    def name(self) -> str:
+        return self._name
+    
+    @property
+    def email(self) -> EmailAddress:
+        return self._email
+    
+    @property
+    def membership_type(self) -> MembershipType:
+        return self._membership_type
+    
+    @property
+    def credits(self) -> int:
+        return self._credits
     
     def can_join_waitlist(self) -> bool:
         """Delegate to membership type."""
-        return self.membership_type.can_join_waitlist()
+        return self._membership_type.can_join_waitlist()
     
     def deduct_credit(self) -> None:
         """Remove one credit from member's account."""
@@ -200,13 +211,11 @@ class Member:
     def refund_credit(self) -> None:
         """Return one credit to member's account."""
         self._credits += 1
-    
-    @property
-    def credits(self) -> int:
-        return self._credits
 ```
 
 **Notice:** The `Member` doesn't know about waitlists or bookings. It knows about credits and membership types. Single Responsibility Principle (Chapter 2) in action.
+
+**From Chapter 5:** We use properties to encapsulate internal state (e.g., `self._credits`), allowing us to add validation or business logic to getters/setters later without changing the interface.
 
 ### Entity: FitnessClass (Enhanced with Waitlist)
 
@@ -221,7 +230,14 @@ class FitnessClass:
     
     def __init__(self, class_id: str, name: str, capacity: int, 
                  day: str, start_time: str):
-        self.id = class_id
+        if not class_id:
+            raise ValueError("Class ID is required")
+        if not name or not name.strip():
+            raise ValueError("Class name cannot be empty")
+        if capacity < 1 or capacity > 50:
+            raise ValueError("Capacity must be between 1 and 50")
+        
+        self._id = class_id
         self._name = name
         self._capacity = capacity
         self._day = day
@@ -229,17 +245,23 @@ class FitnessClass:
         self._bookings: List[str] = []  # member IDs
         self._waitlist: List[str] = []  # member IDs
     
-    @staticmethod
-    def create(class_id: str, name: str, capacity: int, 
-               day: str, start_time: str) -> 'FitnessClass':
-        """Factory method to create a valid fitness class."""
-        if capacity < 1 or capacity > 50:
-            raise ValueError("Capacity must be between 1 and 50")
-        
-        if not name:
-            raise ValueError("Class name cannot be empty")
-        
-        return FitnessClass(class_id, name, capacity, day, start_time)
+    @property
+    def id(self) -> str:
+        return self._id
+    
+    @property
+    def name(self) -> str:
+        return self._name
+    
+    @property
+    def bookings(self) -> List[str]:
+        """Return copy of bookings to prevent external modification."""
+        return self._bookings.copy()
+    
+    @property
+    def waitlist(self) -> List[str]:
+        """Return copy of waitlist to prevent external modification."""
+        return self._waitlist.copy()
     
     def is_full(self) -> bool:
         """Check if class is at capacity."""
@@ -256,7 +278,13 @@ class FitnessClass:
         self._bookings.append(member_id)
     
     def add_to_waitlist(self, member: Member) -> None:
-        """Add a member to the waitlist if they're eligible."""
+        """
+        Add a member to the waitlist if they're eligible.
+        
+        Note: Takes full Member object (not just ID) because we need to check
+        member.can_join_waitlist() to enforce business rules. Only premium
+        members can join waitlists.
+        """
         if not self.is_full():
             raise ValueError("Class is not full; no need for waitlist")
         
@@ -288,23 +316,9 @@ class FitnessClass:
             return promoted_id
         
         return None
-    
-    @property
-    def bookings(self) -> List[str]:
-        """Return copy of bookings to prevent external modification."""
-        return self._bookings.copy()
-    
-    @property
-    def waitlist(self) -> List[str]:
-        """Return copy of waitlist to prevent external modification."""
-        return self._waitlist.copy()
-    
-    @property
-    def name(self) -> str:
-        return self._name
 ```
 
-**Notice:** The class enforces its own invariants. You can't add someone to the waitlist if the class isn't full. You can't add a basic member to the waitlist. The domain protects itself.
+**Notice:** The class enforces its own invariants through `__init__` validation (from Chapter 5). You can't add someone to the waitlist if the class isn't full. You can't add a basic member to the waitlist. The domain protects itself.
 
 Run the unit tests. **Green.** The domain model works.
 

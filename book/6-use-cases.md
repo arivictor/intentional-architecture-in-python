@@ -75,6 +75,12 @@ The domain knows *what* the rules are. The application layer knows *how* to orch
 
 ## Starting with BookClassUseCase
 
+**Naming Note:** In Chapter 2, we called these "services" (e.g., `BookingService`). Now we call them "use cases" (e.g., `BookClassUseCase`). The terms are similar but have nuance:
+- **Service** is a general term for objects that perform operations
+- **Use case** specifically means "a single user goal-oriented workflow"
+
+Use case is more precise. It emphasizes that each class represents one complete user action, not just a collection of related operations. Going forward, we'll use "use case" for application-layer orchestration and reserve "service" for domain services (Chapter 5) and infrastructure services (email, payment, etc.).
+
 Let's build the most fundamental use case in our gym booking system: booking a member into a fitness class.
 
 From the user's perspective, this is simple: "I want to attend this class." But internally, there's coordination required:
@@ -288,6 +294,12 @@ class CancelBookingUseCase:
     def _get_next_class_occurrence(self, time_slot) -> datetime:
         """
         Find the next occurrence of this time slot.
+        
+        NOTE: This helper demonstrates the workflow, but in a production system,
+        this date calculation logic should live in the domain layer—either as a
+        method on TimeSlot value object or in a domain service. Use cases should
+        orchestrate, not implement business logic like time calculations.
+        
         Simplified for example purposes.
         """
         now = datetime.now()
@@ -377,7 +389,10 @@ class ProcessWaitlistUseCase:
         if not member:
             # Member no longer exists, remove from waitlist and try next
             self.waitlist_repository.remove(next_in_line)
-            return self.execute(class_id)  # Recursive call for next person
+            # Recursively process next person in waitlist
+            # NOTE: In production, consider iterative approach to avoid stack overflow
+            # with long waitlists, or add a max recursion depth parameter
+            return self.execute(class_id)
         
         # 5. Check if member still has credits
         try:
@@ -390,7 +405,9 @@ class ProcessWaitlistUseCase:
                 member.name,
                 fitness_class.name
             )
-            return self.execute(class_id)  # Recursive call for next person
+            # Recursively process next person in waitlist
+            # NOTE: See recursion note above
+            return self.execute(class_id)
         
         # 6. Book the member into the class
         try:

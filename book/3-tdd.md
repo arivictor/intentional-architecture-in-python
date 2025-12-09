@@ -149,6 +149,8 @@ class Member:
 
 Run the tests. Still green. But now we have a value object that enforces email validity everywhere. This is refactoring guided by tests.
 
+**Note:** This `EmailAddress` is a simple value object. Chapter 5 expands on value objects as a domain modeling pattern, showing how they make invalid states impossible and encapsulate business rules. For now, focus on how TDD's refactor step naturally leads to better abstractions.
+
 ## Building a Complete Feature: Booking a Class
 
 Let's build something more complex: booking a member into a fitness class.
