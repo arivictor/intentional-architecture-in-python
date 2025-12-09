@@ -142,8 +142,25 @@ Membership type is a concept that deserves its own representation. It's not just
 from enum import Enum
 
 class MembershipType(Enum):
-    BASIC = "basic"
-    PREMIUM = "premium"
+    BASIC = ("basic", 10, 25.0)
+    PREMIUM = ("premium", 20, 50.0)
+    
+    def __init__(self, display_name: str, credits_per_month: int, price: float):
+        self._display_name = display_name
+        self._credits_per_month = credits_per_month
+        self._price = price
+    
+    @property
+    def display_name(self) -> str:
+        return self._display_name
+    
+    @property
+    def credits_per_month(self) -> int:
+        return self._credits_per_month
+    
+    @property
+    def price(self) -> float:
+        return self._price
     
     def can_join_waitlist(self) -> bool:
         """Only premium members can join waitlists."""
@@ -589,12 +606,16 @@ class SqliteMemberRepository(MemberRepository):
         if not row:
             return None
         
+        # Convert stored string back to enum
+        membership_type = (MembershipType.PREMIUM if row[3] == "premium" 
+                          else MembershipType.BASIC)
+        
         return Member(
-            id=row[0],
+            member_id=row[0],
             name=row[1],
             email=EmailAddress(row[2]),
-            membership_type=MembershipType(row[3]),
-            _credits=row[4]
+            membership_type=membership_type,
+            credits=row[4]
         )
     
     def save(self, member: Member) -> None:
@@ -604,7 +625,7 @@ class SqliteMemberRepository(MemberRepository):
             VALUES (?, ?, ?, ?, ?)
             """,
             (member.id, member.name, str(member.email), 
-             member.membership_type.value, member.credits)
+             member.membership_type.display_name, member.credits)
         )
         self._conn.commit()
 ```

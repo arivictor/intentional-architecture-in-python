@@ -178,24 +178,22 @@ Here's `Member` evolved from Chapter 3 into a proper entity:
 ```python
 from datetime import datetime, timedelta
 from typing import Optional
+from enum import Enum
 
 
-class MembershipType:
-    def __init__(self, name: str, credits_per_month: int, price: float):
-        if not name:
-            raise ValueError("Membership type name cannot be empty")
-        if credits_per_month < 0:
-            raise ValueError("Credits per month cannot be negative")
-        if price < 0:
-            raise ValueError("Price cannot be negative")
-        
-        self._name = name
+class MembershipType(Enum):
+    """Membership tier that determines credits and privileges."""
+    BASIC = ("basic", 10, 25.0)
+    PREMIUM = ("premium", 20, 50.0)
+    
+    def __init__(self, display_name: str, credits_per_month: int, price: float):
+        self._display_name = display_name
         self._credits_per_month = credits_per_month
         self._price = price
     
     @property
-    def name(self) -> str:
-        return self._name
+    def display_name(self) -> str:
+        return self._display_name
     
     @property
     def credits_per_month(self) -> int:
@@ -204,13 +202,9 @@ class MembershipType:
     @property
     def price(self) -> float:
         return self._price
-    
-    def __eq__(self, other):
-        if not isinstance(other, MembershipType):
-            return False
-        return (self._name == other._name and 
-                self._credits_per_month == other._credits_per_month and
-                self._price == other._price)
+
+
+**Why an Enum?** We use an enum here because membership types are a fixed set of options (BASIC and PREMIUM). Each has specific properties (credits, price) and potentially behavior (which we'll add in Chapter 8). This makes invalid states impossible—you can't create a membership type that doesn't exist. It's cleaner and safer than using arbitrary strings or creating new instances with constructors.
 
 
 class EmailAddress:
@@ -1157,7 +1151,7 @@ from datetime import datetime, time, timedelta
 
 # Create value objects
 email = EmailAddress("sarah@example.com")
-premium_membership = MembershipType("Premium", credits_per_month=20, price=50)
+premium_membership = MembershipType.PREMIUM
 capacity = ClassCapacity(15)
 time_slot = TimeSlot(DayOfWeek.MONDAY, time(10, 0), time(11, 0))
 

@@ -1409,11 +1409,11 @@ class JsonMemberRepository(MemberRepository):
     def _to_domain(self, data: dict) -> Member:
         """Convert JSON data to a Member entity."""
         email = EmailAddress(data['email'])
-        membership = MembershipType(
-            name=data['membership_type'],
-            credits_per_month=data['membership_credits_per_month'],
-            price=data['membership_price']
-        )
+        
+        # Convert membership type string to enum
+        membership_type_str = data['membership_type'].lower()
+        membership = (MembershipType.PREMIUM if membership_type_str == 'premium' 
+                     else MembershipType.BASIC)
         
         member = Member(
             member_id=data['id'],
@@ -1597,11 +1597,11 @@ class SqliteMemberRepository(MemberRepository):
     def _to_domain(self, row: sqlite3.Row) -> Member:
         """Convert a database row to a Member entity."""
         email = EmailAddress(row['email'])
-        membership = MembershipType(
-            name=row['membership_type'],
-            credits_per_month=row['membership_credits_per_month'],
-            price=row['membership_price']
-        )
+        
+        # Convert membership type string to enum
+        membership_type_str = row['membership_type'].lower()
+        membership = (MembershipType.PREMIUM if membership_type_str == 'premium' 
+                     else MembershipType.BASIC)
         
         member = Member(
             member_id=row['id'],
@@ -2165,7 +2165,7 @@ class TestBookClassUseCase:
         """Test booking a member into a class successfully."""
         # Arrange: Create test data
         email = EmailAddress("sarah@example.com")
-        membership = MembershipType("Premium", credits_per_month=10, price=50)
+        membership = MembershipType.PREMIUM
         member = Member("M001", "Sarah", email, membership)
         
         capacity = ClassCapacity(15)
@@ -2195,7 +2195,7 @@ class TestBookClassUseCase:
         """Test that booking fails when class is at capacity."""
         # Arrange
         email = EmailAddress("sarah@example.com")
-        membership = MembershipType("Premium", credits_per_month=10, price=50)
+        membership = MembershipType.PREMIUM
         member = Member("M001", "Sarah", email, membership)
         
         # Create a class with capacity of 1 and fill it
@@ -2215,7 +2215,7 @@ class TestBookClassUseCase:
         """Test that booking fails when member has no credits."""
         # Arrange
         email = EmailAddress("sarah@example.com")
-        membership = MembershipType("Premium", credits_per_month=10, price=50)
+        membership = MembershipType.PREMIUM
         member = Member("M001", "Sarah", email, membership)
         member._credits = 0  # Deplete credits
         
@@ -2268,7 +2268,7 @@ class TestSqliteMemberRepository:
         """Test that we can save and retrieve a member."""
         # Arrange
         email = EmailAddress("sarah@example.com")
-        membership = MembershipType("Premium", credits_per_month=10, price=50)
+        membership = MembershipType.PREMIUM
         member = Member("M001", "Sarah", email, membership)
         
         # Act
@@ -2286,7 +2286,7 @@ class TestSqliteMemberRepository:
         """Test finding a member by email."""
         # Arrange
         email = EmailAddress("sarah@example.com")
-        membership = MembershipType("Premium", credits_per_month=10, price=50)
+        membership = MembershipType.PREMIUM
         member = Member("M001", "Sarah", email, membership)
         self.repository.save(member)
         
@@ -2324,7 +2324,7 @@ def seed_data(container: ApplicationContainer):
     """Add some initial test data."""
     # Create a member
     email = EmailAddress("sarah@example.com")
-    membership = MembershipType("Premium", credits_per_month=10, price=50)
+    membership = MembershipType.PREMIUM
     member = Member("M001", "Sarah", email, membership)
     container.member_repository.save(member)
     
@@ -2679,11 +2679,11 @@ class SqliteMemberRepository(MemberRepository):
         """
         # Reconstruct value objects - these may raise exceptions
         email = EmailAddress(row['email'])  # May raise InvalidEmailException
-        membership = MembershipType(
-            name=row['membership_type'],
-            credits_per_month=row['membership_credits_per_month'],
-            price=row['membership_price']
-        )
+        
+        # Convert membership type string to enum
+        membership_type_str = row['membership_type'].lower()
+        membership = (MembershipType.PREMIUM if membership_type_str == 'premium' 
+                     else MembershipType.BASIC)
         
         # Reconstruct the entity
         member = Member(
