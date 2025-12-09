@@ -38,6 +38,7 @@ Learn architecture by understanding how, when, and why to apply various architec
 ### Part IV: Integration (Bring It All Together)
 
 * Chapter 8: [Putting It All Together](book/8-putting-it-together.md)
+* Chapter 9: [Conclusion](book/9-conclusion.md)
 
 ## License
 
