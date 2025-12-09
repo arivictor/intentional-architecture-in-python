@@ -214,6 +214,18 @@ class FitnessClass:
         self._capacity = capacity
         self._bookings: List[str] = []
     
+    @property
+    def id(self) -> str:
+        return self._id
+    
+    @property
+    def name(self) -> str:
+        return self._name
+    
+    @property
+    def capacity(self) -> int:
+        return self._capacity
+    
     def add_booking(self, member_id: str) -> None:
         """Add a booking, enforcing capacity constraint."""
         if self.is_full():
