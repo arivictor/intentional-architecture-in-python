@@ -129,13 +129,15 @@ We'll separate our code into four layers:
 
 **Interface** - How the outside world talks to us. The Flask API endpoints. CLI commands. GraphQL resolvers. This layer translates HTTP requests into application use cases and domain results back into JSON.
 
-**The dependency rule:** Each layer only depends on layers below it.
-- Domain depends on nothing
-- Application depends on domain
-- Infrastructure depends on domain (to know what to persist)
-- Interface depends on application (to execute use cases)
+**The dependency rule:** Dependencies flow inward toward the domain.
+- Domain depends on nothing (no imports from other layers)
+- Application depends on domain only
+- Infrastructure *implements* domain-defined abstractions (ports/interfaces), never depends on concrete domain entities
+- Interface depends on application and infrastructure (to execute use cases and wire up adapters)
 
-This rule is what makes layers work. Domain never imports from infrastructure. Infrastructure imports from domain. When we violated this by putting database code in `Member`, we broke the rule and created coupling.
+**Important nuance about infrastructure:** Infrastructure doesn't directly depend on domain entities. Instead, the domain defines abstractions (like repository interfaces), and infrastructure implements them. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
+
+This rule is what makes layers work. Domain never imports from infrastructure. Application calls domain methods and uses infrastructure through abstractions. When we violated this by putting database code in `Member`, we broke the rule and created coupling.
 
 ## Refactoring Into Layers
 
@@ -392,12 +394,18 @@ class Member:
 
 # Infrastructure: infrastructure/member_repository.py
 class MemberRepository:
+    """
+    Repository pattern: Mediates between domain and data storage.
+    Keeps persistence logic out of domain entities.
+    """
     def save(self, member: Member):
         conn = sqlite3.connect('gym.db')
         # Database code lives here
 ```
 
 **Benefit:** Test `Member` with nothing but Python. Swap SQLite for PostgreSQL by changing one file.
+
+**The Repository Pattern:** Instead of domain entities knowing how to save themselves (`member.save()`), we use a repository object that knows how to persist entities. The domain defines what to persist (the `Member` entity), and infrastructure defines how (the `MemberRepository`). This separation is key to the dependency rule—domain doesn't depend on infrastructure. We'll explore repository interfaces (ports) fully in Chapter 7.
 
 ---
 
