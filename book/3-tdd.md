@@ -6,7 +6,7 @@ Test-Driven Development (TDD) is proactive. It shapes your design from the first
 
 TDD isn't just about testing. It's a design discipline. When you write tests first, you're forced to think about how your code will be used before you write it. You define the interface before the implementation. You discover design problems early, when they're cheap to fix.
 
-This chapter introduces TDD as the foundation for everything that follows. The layers, the domain modeling, the ports and adapters—all of these patterns emerge more naturally when you start with tests.
+This chapter introduces TDD as the foundation for everything that follows. The layers, the domain modeling, the ports and adapters, all of these patterns emerge more naturally when you start with tests.
 
 ## Why TDD Before Architecture?
 
@@ -30,9 +30,81 @@ TDD follows a simple rhythm: Red, Green, Refactor.
 
 **Refactor:** Improve the code while keeping the tests green. Remove duplication. Apply SOLID principles. Introduce patterns as needed.
 
-Then repeat. Each cycle is small—a few minutes at most. Each cycle adds a new behavior or improves the design. Over time, a well-tested, well-designed system emerges.
+Then repeat. Each cycle is small, a few minutes at most. Each cycle adds a new behavior or improves the design. Over time, a well-tested, well-designed system emerges.
 
 Let's see this in practice with our gym booking system.
+
+## From User Stories to Tests
+
+Before we dive into code, let's address a critical question: **How do you know what tests to write?**
+
+Many developers struggle with TDD because they don't know where to start. They understand Red-Green-Refactor, but they don't understand how to break down a feature into testable scenarios.
+
+Here's the process:
+
+### Step 1: Start with the User Story or Business Rule
+
+Every feature comes from somewhere: a user story, a business requirement, a bug report. For example:
+
+> "As a gym member, I want to book fitness classes so that I can attend sessions."
+
+This is too vague to test directly. We need to break it down.
+
+### Step 2: Identify the Scenarios
+
+Ask: "What are the different paths through this feature?"
+
+For booking a class:
+- **Happy path:** Member with credits books a class with available space → Success
+- **No credits:** Member with zero credits tries to book → Error
+- **Class full:** Member tries to book a full class → Error
+- **Already booked:** Member tries to book the same class twice → Error
+
+Each scenario represents a different behavior, and each behavior needs a test.
+
+### Step 3: Pick the Simplest Scenario
+
+Don't try to build everything at once. Pick the scenario that delivers the most value with the least complexity. Usually that's the happy path.
+
+For our booking feature, we start with: "Member with credits books a class with available space."
+
+### Step 4: Write a Test That Describes the Behavior
+
+The test should read like a specification:
+
+```python
+def test_member_books_class_successfully():
+    # Given: A member with credits and a class with space
+    member = Member(credits=10)
+    fitness_class = FitnessClass(capacity=20)
+    
+    # When: The member books the class
+    booking = book_class(member, fitness_class)
+    
+    # Then: The booking is confirmed and credits are deducted
+    assert booking.status == "confirmed"
+    assert member.credits == 9
+```
+
+Notice the structure: **Given-When-Then**. This makes tests readable and forces you to think through the scenario.
+
+### Step 5: Let the Test Drive the Design
+
+When you write the test first, you're forced to answer design questions:
+- What parameters does `book_class()` need?
+- What does it return?
+- How does `Member` track credits?
+- How does `FitnessClass` track capacity?
+
+These aren't implementation details—they're interface decisions. And TDD forces you to make them consciously, from the perspective of the code's user.
+
+### Step 6: Repeat for Each Scenario
+
+Once the happy path works, add tests for edge cases and error conditions. Each test adds a new behavior. Each behavior is verified independently.
+
+**This is how TDD shapes architecture:** You start with user value (the story), break it into behaviors (scenarios), specify each behavior (tests), and let the implementation emerge from those specifications.
+
+Let's see this process in action.
 
 ## Starting Simple: Our First Feature
 
@@ -163,10 +235,38 @@ Run the tests. Still green. But now we have a value object that enforces email v
 
 Let's build something more complex: booking a member into a fitness class.
 
-Business rules:
+**Business rules:**
 - The class must have available capacity
 - The member must have sufficient credits
 - A booking creates a record
+
+Before we write the test, let's think through what we're building. This habit—analyzing before coding—is what separates TDD from "test-after development."
+
+### What Does This Feature Actually Need to Do?
+
+Looking at our business rules, we can identify the core scenario:
+- **Happy path:** A member with credits books a class that has space
+
+We also see implied failure scenarios:
+- **No credits:** Member tries to book but has no credits left
+- **Class full:** Member tries to book but the class is at capacity
+
+Each scenario needs a test. But let's start with the happy path—the simplest case that delivers value.
+
+### What Objects Do We Need?
+
+From the business rules, three concepts emerge:
+- **Member** - needs to track credits
+- **FitnessClass** - needs to track capacity and current bookings
+- **Booking** - a record that links member to class
+
+### What Behavior Goes Where?
+
+This is the key question TDD forces you to answer early:
+- Should `book_class()` check credits, or should `Member`?
+- Should `book_class()` check capacity, or should `FitnessClass`?
+
+We'll discover the answer by writing the test and seeing what interface makes sense.
 
 Start with the test:
 
@@ -293,7 +393,20 @@ def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
 
 Run the tests. Still green. But now the business rules live in the domain objects. `Member` enforces credit rules. `FitnessClass` enforces capacity rules. The booking function just orchestrates.
 
+**What just happened?** We answered the question "what behavior goes where?" through TDD:
+- First attempt: `book_class()` directly manipulated credits and bookings (worked, but fragile)
+- Refactored: Domain objects (`Member`, `FitnessClass`) enforce their own rules
+- Result: Better design emerged from the refactor step
+
 This is TDD driving design. The tests forced us to think about the interface. The refactoring step let us improve the structure. The safety net let us move code around confidently.
+
+**Notice the pattern:**
+1. Business rule → Test scenario → Required objects and behavior
+2. Write test → Discover what interface you need
+3. Make it pass → Prove the behavior works
+4. Refactor → Move logic where it belongs
+
+This pattern repeats throughout the book. In Chapter 5, we'll see how these domain objects become entities and value objects. In Chapter 6, we'll see how `book_class()` becomes a use case. But it all starts here, with tests driving the design.
 
 ## Test-Driven Design Decisions
 
@@ -429,9 +542,46 @@ TDD naturally builds the right pyramid. When you write tests first, you start wi
 
 Let's build a feature from scratch using TDD: premium members get priority when a class is full.
 
-Business rule: When a class is full, premium members can join a waitlist. When someone cancels, the next premium member on the waitlist gets the spot.
+**Business rule:** When a class is full, premium members can join a waitlist. When someone cancels, the next premium member on the waitlist gets the spot.
+
+Before we write any tests, let's think through what we're building. This is a critical step that many developers skip—they jump straight to writing tests without understanding what behavior they're trying to capture.
+
+### Breaking Down the Feature
+
+TDD doesn't mean "write random tests." It means "write tests that specify the behavior you need." To do that, you need to understand the behavior first.
+
+#### What scenarios does this business rule create?
+
+Let's analyze the business rule and identify the distinct paths through our system:
+
+1. **Premium member encounters full class** - A premium member tries to book a full class and should be added to a waitlist instead of being rejected
+2. **Basic member encounters full class** - A basic member tries to book a full class and should get an error (no waitlist access)
+3. **Cancellation promotes waitlisted member** - When someone cancels their booking, the first premium member on the waitlist should automatically get the spot
+
+Each scenario represents a different behavior we need to test.
+
+#### What domain concepts emerge?
+
+From these scenarios, we can see we need:
+
+- **Member with membership type** - We need to distinguish premium from basic members
+- **FitnessClass with waitlist** - Classes need to track both confirmed bookings and waitlisted members
+- **Waitlist rules** - Logic for who can join and when they get promoted
+
+#### How do tests reveal architecture?
+
+Notice what happened: we started with a business rule, broke it into scenarios, and discovered the objects and behaviors we need. **The tests will make these discoveries explicit.**
+
+When we write the test for "premium member encounters full class," we'll be forced to decide:
+- How does a Member know if it's premium?
+- How does a FitnessClass track waitlisted members?
+- What does the `book_class` function return when someone is waitlisted?
+
+**This is how TDD drives design.** The test forces you to answer these questions before you write implementation code. You design the interface (what the code does) before the implementation (how it does it).
 
 ### Step 1: Write the Test
+
+Now that we understand what we're building, let's write a test for the first scenario: premium member encounters full class.
 
 ```python
 def test_premium_member_joins_waitlist_when_class_full():
@@ -461,6 +611,16 @@ def test_premium_member_joins_waitlist_when_class_full():
 ```
 
 **Red.** The code doesn't exist.
+
+**What did this test reveal about our design?**
+
+Look at what we had to decide just to write this test:
+- `Member` needs a `membership_type` parameter
+- `FitnessClass` needs to track a `waitlist` (separate from bookings)
+- `book_class` needs to return a result with a `status` field
+- There's a concept of "waitlisted" as a booking status
+
+These are design decisions. We made them by thinking about how the code should be used, not how it will be implemented. This is the power of TDD—it forces you to design from the outside in.
 
 ### Step 2: Make It Pass
 
@@ -523,6 +683,16 @@ def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
 
 **Green.** Test passes.
 
+**What did making this test pass reveal?**
+
+- We needed an `is_premium()` method on Member (encapsulation of the membership type check)
+- FitnessClass needs both `_bookings` and `_waitlist` as separate collections
+- The `book_class` function has branching logic based on class fullness and member type
+
+This is simple code, but it works. We resisted the urge to over-engineer. We didn't create a "WaitlistStrategy" or "MembershipTypeFactory." We wrote the simplest code that makes the test pass.
+
+Now we can refactor with confidence because the test proves the behavior works.
+
 ### Step 3: Refactor
 
 The `book_class` function is getting complex. It has multiple responsibilities: checking capacity, handling waitlists, deducting credits. Let's split it.
@@ -555,14 +725,25 @@ class BookingService:
             status=status,
             booked_at=datetime.now()
         )
-```
+    ```
 
-Run the tests. Still green. The code is cleaner. Each method has one purpose.
+    **Why this refactoring?**
 
-Now add the next feature: when someone cancels, promote the first waitlisted member.
+    The `book_class` function was doing too much: checking capacity, handling waitlists, deducting credits. It had multiple reasons to change (violates Single Responsibility Principle).
 
-```python
-def test_cancellation_promotes_waitlisted_member():
+    By extracting a `BookingService` class, we've:
+    - Separated concerns (each private method has one job)
+    - Made the code easier to test (we can test `_handle_full_class` independently if needed)
+    - Made the code easier to read (the public method reads like a story)
+
+    **This is the TDD cycle in action:** Red (write test) → Green (make it pass) → Refactor (improve design). Tests enabled this refactoring. We moved logic into a service class without changing behavior. The test proves it still works.
+
+    #### Adding the Second Scenario
+
+    We've tested the happy path (premium member joins waitlist). Now let's test what happens when someone cancels:
+
+    ```python
+    def test_cancellation_promotes_waitlisted_member():
     premium_member = Member("M001", "Alice", "alice@example.com", "premium", 10)
     basic_member = Member("M002", "Bob", "bob@example.com", "basic", 10)
     
@@ -594,15 +775,27 @@ This is TDD. Each test adds a new behavior. Each refactor improves the design. T
 
 The architectural patterns in the next chapters—layers, domain models, use cases, ports and adapters—all emerge naturally when you practice TDD.
 
-**Layers** happen because you can't test business logic mixed with infrastructure. TDD forces separation.
+This isn't theory. Look at what we just built:
 
-**Domain models** happen because tests prefer objects that enforce their own rules. TDD pushes logic into entities and value objects.
+**Tests revealed domain models.** We wrote tests for booking logic and discovered we needed:
+- `Member` that enforces its own credit rules (not a passive data bag)
+- `FitnessClass` that manages capacity and waitlists (not just properties)
+- `MembershipType` that encodes business rules (not just a string)
 
-**Use cases** happen because tests need clear entry points. TDD encourages focused, orchestrating functions.
+The tests showed us these objects because we needed somewhere to put the business logic.
 
-**Ports and adapters** happen because tests can't depend on real databases and APIs. TDD demands abstractions.
+**Tests revealed the need for layers.** Right now, `book_class()` is simple. But what happens when we add:
+- Database persistence (save the booking)
+- Email notifications (confirm the booking)
+- Payment processing (charge for the class)
 
-You don't need to know these patterns up front. TDD will lead you to them. When a test is hard to write, that's a signal. The code is asking for better structure.
+Suddenly your test needs a database, an email server, and a payment API just to verify that "premium members can join waitlists." That's a signal. The business logic needs to be separated from infrastructure.
+
+**Tests revealed use cases.** The `BookingService.book_class()` method we refactored? That's a use case waiting to happen. It orchestrates the workflow: check capacity, handle waitlist, deduct credits. Chapter 6 shows how to formalize this.
+
+**Tests revealed the need for abstractions.** When we test `BookingService`, we don't want to depend on a real database. We want to test the logic. This pushes us toward ports (interfaces) and adapters (implementations). Chapter 7 shows the pattern.
+
+**The key insight:** You don't need to know these patterns up front. TDD will lead you to them. When a test is hard to write, that's a signal. The code is asking for better structure. Listen to the tests—they're showing you the architecture you need.
 
 ## When NOT to Use TDD
 

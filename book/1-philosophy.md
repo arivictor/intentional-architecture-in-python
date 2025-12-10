@@ -1,18 +1,16 @@
 # Chapter 1: Philosophy
 
-Software architecture is a discipline of intentional decisions. A mindset. A way of understanding the system beneath the code. It’s not folder structures, and it is not obedience to the first pattern you learned.
-
-Most developers first encounter "architecture" as a list of commandments handed down from someone more senior: "separate your layers," "use hexagonal," "follow SOLID." You follow the rules because they seem important, but no one ever explains what problem they exist to solve. We are going to break that cycle.
+Software architecture is a discipline of intentional decisions. A mindset. A way of understanding the system beneath the code. It’s not just folder structures, and it is not obedience to the first pattern you learned.
 
 Software architecture is not a set of patterns you apply just because.
 It’s not a diagram you draw.
 It’s the collective form your decisions take over time.
 
-Architecture is choosing the parts of your system that must be easy to change, and protecting them from the parts that won't be. For example, pricing rules change frequently, so they live in the domain. Database choice changes rarely, so it's isolated in infrastructure.
+Architecture is choosing the parts of your system that must be easy to change, and protecting them from the parts that won't be. For example, the business logic your business runs on is less likely to change than the type of storage service you use. We use architecture to separate those concerns and ensure that when one changes, the other remains unaffected.
 
-Everything around your core logic will shift. Frameworks will change. Databases will be replaced. APIs will evolve. Business priorities will absolutely change. If the heart of your system is dependent on any of these, your codebase becomes hostage to technical detail. That’s how software becomes a burden. Not through bad syntax or poor variable naming, but through uninformed decisions made early and left to solidify.
+Everything around your business logic will shift. Frameworks will change. Databases will be replaced. APIs will evolve. Business priorities will absolutely change. If the heart of your system is dependent on any of these, your codebase becomes hostage to technical detail. That’s how software becomes a burden. Not through bad syntax or poor variable naming, but through uninformed decisions made early and left to solidify.
 
-Architecture is intentional.
+Good architecture is intentional.
 
 Thinking like an architect means shifting the question from "What pattern should I use?" to "What decision am I protecting here?" The pattern becomes a consequence, not a prescription. Good architecture comes from judgment: the ability to reason about constraints, tradeoffs, and the long-term impact of what seems like a small choice today.
 
@@ -27,9 +25,9 @@ If nothing ever changed, you wouldn't need architecture. You could write a singl
 
 Change is inevitable. The business will pivot. The database will be migrated. The API you depend on will deprecate. Your users will demand features you never anticipated. These changes are not failures of planning. They're the reality of software that matters enough to still be around.
 
-Architecture exists to absorb change in the places where it hurts least. It's about identifying what will change and what won't, then organising your system accordingly. You don't protect everything. You can't. You protect the core logic, the part that represents the actual value of your system, and you make everything else replaceable.
+Architecture exists to absorb change in the places where it hurts least. It's about identifying what will change and what won't, then organising your system accordingly. You don't protect everything. You can't. You protect the business logic, the part that represents the actual value of your system, and you make everything else replaceable.
 
-This is why frameworks feel wrong when you let them dictate your business logic. The framework will change. Your business rules shouldn't have to. Good architecture keeps them separate so when the framework evolves, your core remains untouched.
+This is why frameworks feel wrong when you let them dictate your business logic. The framework will change. Your business rules shouldn't have to. Good architecture keeps them separate so when the framework evolves, your business logic remains untouched.
 
 The question isn't "will this change?" The question is "when this changes, how much of my system has to rewrite itself?"
 
@@ -47,7 +45,7 @@ Let's make this concrete. The same gym booking system, built under different con
 
 **Solo developer building a side project:**
 
-You know the entire codebase. You can change anything without coordination. Communication overhead is zero. Your constraint is time—you're building this after work.
+You know the entire codebase. You can change anything without coordination. Communication overhead is zero. Your constraint is time, you're building this after work.
 
 **The right architecture:** Simple. Direct. A single file might be fine. Use SQLite, not PostgreSQL with read replicas. Skip the abstraction layers. You can refactor later if it grows. The code lives in your head, so documentation can be minimal.
 
@@ -62,7 +60,7 @@ def book_class(member_id, class_id):
 
 **50-person team maintaining production software:**
 
-No one knows the entire codebase. Changes require coordination. Communication overhead is high. Multiple teams touch the same system. Your constraint is coordination—you need clear boundaries.
+No one knows the entire codebase. Changes require coordination. Communication overhead is high. Multiple teams touch the same system. Your constraint is coordination, you need clear boundaries.
 
 **The right architecture:** Layered. Explicit. Well-documented. Clear ownership of modules. Comprehensive tests so changes don't break other teams' work. Abstractions that let teams work independently.
 
@@ -86,7 +84,7 @@ The solo developer's architecture would drown the large team in confusion. The l
 
 **Greenfield project starting from scratch:**
 
-No existing code to work around. You choose your database, your framework, your patterns. Your constraint is uncertainty—you don't know if the project will succeed.
+No existing code to work around. You choose your database, your framework, your patterns. Your constraint is uncertainty, you don't know if the project will succeed.
 
 **The right architecture:** Start simple. Prove the concept works. Don't build for scale you don't have. Use boring, proven technology. Defer abstractions until you understand the domain better.
 
@@ -102,7 +100,7 @@ def create_member(name, email):
 
 Existing database schema you can't change. Existing APIs other systems depend on. Existing deployment pipeline. Your constraint is compatibility—you can't break what's already there.
 
-**The right architecture:** Work within the constraints. Create abstraction layers around the legacy parts. Use the Strangler Fig pattern—wrap old code, redirect traffic, replace incrementally. Accept that some parts will always be messy.
+**The right architecture:** Work within the constraints. Create abstraction layers around the legacy parts. Use the Strangler Fig pattern, wrap old code, redirect traffic, replace incrementally. Accept that some parts will always be messy.
 
 ```python
 # Reality of legacy systems
@@ -120,7 +118,7 @@ class ModernBookingService:
         return self.modern_repo.book_class(member_id, class_id)
 ```
 
-The greenfield approach would fail in legacy—you can't ignore existing systems. The legacy approach would slow down greenfield—you don't need to support what doesn't exist yet.
+The greenfield approach would fail in legacy, you can't ignore existing systems. The legacy approach would slow down greenfield, you don't need to support what doesn't exist yet.
 
 ### Organizational Stage Constraints
 
@@ -128,12 +126,12 @@ The greenfield approach would fail in legacy—you can't ignore existing systems
 
 **Startup racing to find product-market fit:**
 
-Requirements change daily. Features are experiments. Speed matters more than perfection. Your constraint is survival—ship or die.
+Requirements change daily. Features are experiments. Speed matters more than perfection. Your constraint is survival, ship or die.
 
-**The right architecture:** Optimize for iteration speed. Keep it simple enough to change completely. Avoid premature optimization. Technical debt is fine if it buys you learning. You might pivot next month.
+**The right architecture:** Optimise for iteration speed. Keep it simple enough to change completely. Avoid premature optimization. Technical debt is fine if it buys you learning. You might pivot next month.
 
 ```python
-# Startup: optimize for change
+# Startup: Optimise for change
 def book_class(member, fitness_class):
     # Quick and dirty
     # We'll refactor if this feature works
@@ -143,12 +141,12 @@ def book_class(member, fitness_class):
 
 **Enterprise maintaining critical infrastructure:**
 
-Requirements are stable. Compliance is mandatory. Audit trails are required. Downtime costs millions. Your constraint is risk—you cannot break production.
+Requirements are stable. Compliance is mandatory. Audit trails are required. Downtime costs millions. Your constraint is risk, you cannot break production.
 
-**The right architecture:** Optimize for reliability. Comprehensive logging. Explicit error handling. Multiple environments. Gradual rollouts. Feature flags. The code that handles one booking might be 200 lines, but it's bulletproof.
+**The right architecture:** Optimise for reliability. Comprehensive logging. Explicit error handling. Multiple environments. Gradual rollouts. Feature flags. The code that handles one booking might be 200 lines, but it's bulletproof.
 
 ```python
-# Enterprise: optimize for safety
+# Enterprise: Optimise for safety
 class BookingService:
     def book_class(self, member_id: str, class_id: str) -> Result[Booking, Error]:
         try:
@@ -182,7 +180,7 @@ A solo developer doesn't need the coordination overhead of a large team. A start
 
 Good architecture emerges from honest assessment of the forces acting on your system. Time pressure might mean you defer certain abstractions until they're needed. A small team might favor simplicity over theoretical purity because maintainability matters more than perfection. A regulated industry might demand audit trails and explicit boundaries that feel like overkill elsewhere.
 
-These constraints reveal what matters in your context. They force you to prioritize. They prevent you from over-engineering solutions to problems you don't have. They make you choose.
+These constraints reveal what matters in your context. They force you to prioritise. They prevent you from over-engineering solutions to problems you don't have. They make you choose.
 
 The best architects don't fight constraints. They understand them, respect them, and use them to make better decisions. Constraints clarify. They tell you what you can afford to ignore and what you absolutely must get right.
 
@@ -200,11 +198,11 @@ Your answers will guide every architectural decision you make. The patterns you'
 
 Not all complexity is equal; some of it is inherent to the problem, and some of it is self-inflicted. The job of architecture is to reduce accidental complexity so the team can focus on what matters.
 
-Essential complexity is the difficulty inherent to the domain itself. If you're building a tax calculation system, dealing with tax law is complex because tax law is complex. If you're scheduling appointments across time zones with availability constraints, that's genuinely hard. This complexity can't be eliminated—it's the problem you're solving.
+Essential complexity is the difficulty inherent to the problem (domain) you're solving itself. If you're building a tax calculation system, dealing with tax law is complex, because tax law is complex. If you're scheduling appointments across time zones with availability constraints, that's genuinely hard. This complexity can't be eliminated, it's the problem you're solving.
 
 Accidental complexity is everything else. It's the friction you introduce through poor choices, unclear boundaries, tangled dependencies, and technical debt. It's when you can't add a simple feature because you have to understand seventeen different layers first. It's when changing one thing breaks three unrelated things. It's when a new developer takes weeks to understand code that should take days.
 
-Accidental complexity multiplies over time. A small shortcut becomes a pattern. The pattern becomes a habit. The habit becomes "how we do things here." Before long, you're spending more time navigating the mess than solving actual problems. The essential complexity—the real work—gets buried under layers of self-inflicted confusion.
+Accidental complexity multiplies over time. A small shortcut becomes a pattern. The pattern becomes a habit. The habit becomes "how we do things here." Before long, you're spending more time navigating the mess than solving actual problems. The essential complexity gets buried under layers of self-inflicted confusion.
 
 Good architecture doesn't eliminate complexity. It organises it. It keeps the essential complexity visible and contained, so the team can reason about it clearly. It strips away the accidental complexity that obscures understanding and slows progress.
 
@@ -246,7 +244,7 @@ def calculate_loyalty_discount(membership_type, years_active):
 
 The first version mixes essential complexity (the discount rules) with accidental complexity (database connections, SQL queries, date calculations). The business rule is buried. The second version isolates what matters: given a membership type and tenure, what's the discount? Everything else is infrastructure, and it belongs somewhere else.
 
-The essential complexity—the discount logic—hasn't changed. But now you can understand it, test it, and modify it without thinking about databases.
+The essential complexity, the discount logic, hasn't changed. But now you can understand it, test it, and modify it without thinking about databases.
 
 ## Why Patterns Become Cargo Cults
 
@@ -260,9 +258,7 @@ This is how you end up with unnecessary abstraction, indirection that serves no 
 
 Patterns are not universally good. They're context-dependent solutions to specific problems. Hexagonal Architecture solves certain problems around testability and technology independence. It also introduces overhead. Whether that tradeoff makes sense depends entirely on your situation. If you don't have the problem, you don't need the solution.
 
-The danger isn't the pattern itself. The danger is applying it without asking why. Without understanding the forces at play. Without considering the cost.
-
-Good architects know the patterns, but they also know when not to use them. They can articulate why a particular structure exists and what problem it solves. If you can't explain the tradeoff, you're cargo culting.
+The danger isn't the pattern itself. The danger is applying it without asking why. Without understanding the forces at play. Without considering the cost. Good architects know the patterns, but they also know when not to use them. They can articulate why a particular structure exists and what problem it solves. If you can't explain the tradeoff, you're cargo culting.
 
 Here's a real example. You're building a small internal tool for your team to track gym class bookings. It'll have maybe fifty users. You read about how Netflix uses microservices, so you decide to split your application into separate services:
 
@@ -342,11 +338,9 @@ Freedom through constraints sounds contradictory, but it's one of the most power
 
 Good architecture removes options. It says "business logic goes here, not there." It says "dependencies flow in this direction, not that one." It establishes boundaries that eliminate entire categories of bad decisions. This isn't restriction—it's clarity.
 
-Consider the difference between a blank canvas and a form. The blank canvas offers infinite possibilities, which sounds liberating until you realise you have to invent structure from nothing every time. The form offers constraints: these fields, in this order, with these rules. Within those constraints, you can work quickly and confidently because the structure is already decided.
+When your architecture establishes clear boundaries, developers don't waste time wondering where code belongs. When it enforces dependency rules, they don't accidentally create circular dependencies. When it separates concerns, they don't have to untangle business logic from infrastructure every time they make a change.
 
-The same principle applies to code. When your architecture establishes clear boundaries, developers don't waste time wondering where code belongs. When it enforces dependency rules, they don't accidentally create circular dependencies. When it separates concerns, they don't have to untangle business logic from infrastructure every time they make a change.
-
-As Sean Goedecke writes, when designing software systems, do the simplest thing that could possibly work. Simple systems have fewer moving pieces, fewer things you have to think about when you're working with them. Simple systems are less internally connected, composed from components with clear, straightforward interfaces.
+Keep it simple. Simple systems have fewer moving pieces, fewer things you have to think about when you're working with them. Simple systems are less internally connected, composed from components with clear, straightforward interfaces.
 
 The master appears to do less because they've eliminated unnecessary motion. Good architecture does the same: it removes the options that don't serve you, leaving only the moves that matter.
 
@@ -354,13 +348,13 @@ The master appears to do less because they've eliminated unnecessary motion. Goo
 
 Perfectionism is a common trap, especially among developers learning architecture for the first time.
 
-You learn about Clean Architecture, SOLID principles, and Domain-Driven Design, and suddenly every line of code feels wrong. You see coupling everywhere. You want to fix it all. You spend hours refactoring code that works perfectly fine because it doesn't match the ideal in your head.
+You learn about Clean Architecture, SOLID principles, and Domain-Driven Design, and suddenly every line of code feels wrong. You see coupling everywhere. You want to fix it all. You spend hours refactoring code that works perfectly fine because it doesn't match the ideal in your head. Or inversely, you try and make your code fit the architecture perfectly from day one, spending weeks designing layers and abstractions before you even have a working prototype.
 
 This is how good intentions paralyse progress.
 
 Perfect architecture doesn't exist. Every decision is a tradeoff. Every pattern has a cost. The question is never "is this perfect?" The question is "is this good enough for what we need right now?"
 
-Sometimes messy code is exactly what the moment requires. A quick prototype doesn't need layers and abstractions—it needs to exist. A proof of concept doesn't need to be maintainable—it needs to prove the concept. A one-time script doesn't need architectural purity—it needs to run once and be forgotten.
+Sometimes messy code is exactly what the moment requires. A quick prototype doesn't need layers and abstractions, it needs to exist. A proof of concept doesn't need to be maintainable, it needs to prove the concept. A one-time script doesn't need architectural purity, it needs to run once and be forgotten.
 
 The skill isn't knowing the perfect pattern. The skill is knowing when to apply it and when to let it go. It's recognising that shipping working software today is often better than shipping perfect software next month. It's understanding that code can be refactored later, but only if it exists first.
 
@@ -376,7 +370,7 @@ Start with good enough. Evolve toward better. Perfect can wait.
 
 Let's put philosophy into practice. Throughout this book, we'll build a gym class booking system. But we won't start with perfect architecture. We'll start with something simple that works.
 
-Here's our first version—a script that handles the basics:
+Here's our first version, a script that handles the basics:
 
 ```python
 # gym_booking.py
@@ -492,10 +486,10 @@ if __name__ == "__main__":
 
 This code works. It's less than 120 lines. You can understand it in a few minutes. It handles members, classes, and bookings. It validates capacity and credits. For a proof of concept, it's exactly what you need.
 
-But it has problems. You might not see them yet—they're hidden by simplicity. As requirements grow, this structure will strain. We'll discover the problems together, and we'll fix them using architectural patterns. Not because patterns are "correct," but because the code will demand them.
+But it has problems. You might not see them yet, they're hidden by simplicity. As requirements grow, this structure will strain. We'll discover the problems together, and we'll fix them using architectural patterns. Not because patterns are "correct," but because the code will demand them.
 
-**This is where we start.** A working script. Good enough for now. Ready to evolve.
+**This is where we start.** A working script. Good enough for a proof of concepot. Ready to evolve.
 
-In the next chapter, we'll add a new requirement. The script will start to break down. And we'll see our first architectural principle emerge—not from theory, but from necessity.
+In the next chapter, we'll add a new requirement. The script will start to break down. And we'll see our first architectural principle emerge, not from theory, but from necessity.
 
 Architecture isn't something you impose on code. It's something that emerges when code asks for it.

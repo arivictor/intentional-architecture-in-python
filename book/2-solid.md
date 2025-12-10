@@ -1,8 +1,6 @@
 # Chapter 2: SOLID
 
-Remember the script from Chapter 1? The one that worked? The 120 lines of functions and dictionaries that handled members, classes, and bookings? It's still working.
-
-But philosophy only takes you so far. Architecture isn't built on principles alone—it's built on decisions made when code demands them. Chapter 1 gave you the mindset. Now we're going to apply it.
+Philosophy only takes you so far. Architecture isn't built on principles alone, it's built on decisions made when code demands them. Chapter 1 gave you the mindset. Now we're going to apply it.
 
 Our simple script is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. Mission accomplished.
 
@@ -190,7 +188,7 @@ This principle feels paradoxical at first. How can something be both open and cl
 
 The goal is to add new behaviour without changing existing code. When new requirements arrive, you want to extend the system by adding new classes or modules, not by modifying working code. Modifying working code risks breaking it. Adding new code keeps the old code stable.
 
-The `PricingService` we just extracted respects Single Responsibility—pricing logic lives in one place. But it violates Open/Closed. Every time a new membership type appears, you have to modify the working code. Watch what happens as requirements evolve:
+The `PricingService` we just extracted respects Single Responsibility, pricing logic lives in one place. But it violates Open/Closed. Every time a new membership type appears, you have to modify the working code. Watch what happens as requirements evolve:
 
 ```python
 class PricingService:
@@ -379,7 +377,7 @@ def process_booking(membership: Membership, fitness_class):
 
 It works the same whether you pass `RegularMembership` or `GuestPass`. No special cases. No surprises. That's Liskov Substitution.
 
-**Why this matters practically:** Without this principle, every function that accepts a parent type needs defensive checks for every possible subtype. Your codebase fills with `if isinstance(obj, GuestPass)` conditions. When you add a new membership type, you hunt through the entire codebase updating those checks. Liskov Substitution prevents this coupling—polymorphism becomes a tool for extension, not a source of bugs.
+**Why this matters practically:** Without this principle, every function that accepts a parent type needs defensive checks for every possible subtype. Your codebase fills with `if isinstance(obj, GuestPass)` conditions. When you add a new membership type, you hunt through the entire codebase updating those checks. Liskov Substitution prevents this coupling.
 
 Yes, we added a `can_book()` method. Yes, that's more code. But look at what we gained: you can now add ten different membership types without changing any code that processes bookings. Each type encapsulates its own booking rules. The complexity is contained, not scattered.
 
@@ -613,17 +611,17 @@ This is Dependency Inversion. The high-level policy (booking) defines what it ne
 
 ## When SOLID Doesn't Matter
 
-Here's something important: you don't need SOLID everywhere.
+You don't need SOLID everywhere.
 
 These principles exist to manage complexity and enable change. But not all code is complex. Not all code needs to change. Sometimes you're writing a script that runs once and gets deleted. Sometimes you're prototyping an idea to see if it's worth building. Sometimes you know with certainty that a piece of code will never grow beyond its current form.
 
-In those moments, SOLID is overhead. Pure overhead.
+In those moments, SOLID is overhead.
 
 A script that scrapes a website and dumps CSV data? One file. One class if you're feeling formal. Maybe just functions. No abstractions. No interfaces. No dependency injection. You're not building a system. You're solving a problem and moving on.
 
 A prototype to test if an API integration works? Hardcode the credentials. Put everything in `main()`. Get it working. If the prototype succeeds and becomes a real feature, *then* you refactor toward SOLID. Not before.
 
-The key is recognising the difference between code that's disposable and code that's foundational. Code that'll be read, modified, extended, and maintained over months or years—that's when SOLID thinking pays off. Code that exists to answer a quick question or automate a one-time task—that's when SOLID is waste.
+The key is recognising the difference between code that's disposable and code that's foundational. Code that'll be read, modified, extended, and maintained over months or years—that's when SOLID thinking pays off. Code that exists to answer a quick question or automate a one-time task, that's when SOLID is waste.
 
 This isn't permission to write sloppy code everywhere. It's permission to match your effort to the problem's scope. A throwaway script doesn't need the architecture of a banking system. Don't pretend it does.
 

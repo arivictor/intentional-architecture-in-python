@@ -30,9 +30,47 @@ Business rules:
 
 This feature touches everything: domain logic, persistence, orchestration, and external communication.
 
+## Breaking Down the Feature
+
+Before we write any code, let's think through what we're building. This is where architecture decisions happen—not in templates, but in understanding the problem.
+
+### What are the key scenarios?
+
+Looking at our business rules, we can identify three distinct behaviors:
+
+1. **Premium member joins waitlist** - When a class is full, a premium member should be able to join a waitlist instead of getting rejected
+2. **Basic member gets rejected** - When a class is full, a basic member should get a clear error (no waitlist access)
+3. **Waitlist promotion on cancellation** - When someone cancels, the first person on the waitlist should automatically get their spot
+
+These aren't random—they're derived directly from our business rules. Each represents a different path through our system.
+
+### What domain concepts do we need?
+
+To implement these scenarios, we need to model:
+
+- **MembershipType** - A value object that distinguishes premium from basic members and encapsulates the rules about who can waitlist
+- **Member** - An entity with membership type, so we can check their permissions
+- **FitnessClass** - An entity that needs to track both bookings AND a waitlist, and handle the promotion logic
+- **Waitlist behavior** - Logic for adding to waitlist, checking capacity, and promoting members
+
+### What are the edge cases?
+
+- What if the waitlist itself gets full? (We'll keep it simple for now—unlimited waitlist)
+- What if multiple people are on the waitlist? (First-in-first-out is fairest)
+- What if a premium member tries to join the waitlist twice? (Should be prevented)
+
+### Why start with tests?
+
+We're using TDD because:
+1. **Tests define success** - Before we build anything, we need to know what "working" means
+2. **Tests drive design** - Writing tests forces us to think about the public interface before the implementation
+3. **Tests give confidence** - When we refactor later, tests prove we didn't break anything
+
+Each test below represents one of the scenarios we identified. They're not random—they're intentional examples of the behavior we want.
+
 ## Step 1: Start with Tests (TDD)
 
-We begin with tests that define the behavior we want.
+Now that we understand what we're building and why, let's write tests that capture these scenarios.
 
 ```python
 # tests/unit/domain/test_waitlist.py
@@ -69,6 +107,7 @@ def test_premium_member_joins_waitlist_when_class_full():
     assert member.id in fitness_class.waitlist
     assert len(fitness_class.waitlist) == 1
 
+**What this test reveals:** We need a `FitnessClass` that can track a waitlist separately from bookings, and a way to add members to it. The test shows that premium members should succeed when the class is full.
 
 def test_basic_member_cannot_join_waitlist():
     """Basic members get an error when trying to book a full class."""
@@ -94,6 +133,7 @@ def test_basic_member_cannot_join_waitlist():
     with pytest.raises(ClassFullException):
         fitness_class.add_to_waitlist(member)
 
+**What this test reveals:** The `add_to_waitlist` method needs to check membership type and raise an exception for basic members. The domain entity must enforce business rules, not just store data.
 
 def test_cancellation_promotes_waitlisted_member():
     """When someone cancels, the first waitlisted member gets the spot."""
@@ -125,9 +165,20 @@ def test_cancellation_promotes_waitlisted_member():
     assert promoted == premium_member.id
     assert premium_member.id in fitness_class.bookings
     assert len(fitness_class.waitlist) == 0
+
+**What this test reveals:** The `remove_booking` method needs to be smart—it can't just remove a booking, it has to check the waitlist and promote someone. This is core domain logic that belongs in the entity.
+
+**Notice what we've learned from writing tests first:**
+- We need a `MembershipType` that encodes permissions
+- `FitnessClass` needs both `bookings` and `waitlist` collections
+- The `add_to_waitlist()` method must validate membership type
+- The `remove_booking()` method must handle promotion logic
+- We need a `ClassFullException` for business rule violations
+
+These design decisions emerged from thinking about behavior, not from following a template.
 ```
 
-**Red.** These tests fail because the functionality doesn't exist.
+**Red.** These tests fail because the functionality doesn't exist. That's exactly where we want to be—we have a clear definition of success, and now we can make it happen.
 
 ## Step 2: Model the Domain
 
@@ -331,39 +382,70 @@ Run the unit tests. **Green.** The domain model works.
 
 ## Step 3: Apply SOLID Principles
 
-Let's verify we're following SOLID:
+Before we move forward, let's pause and verify our domain model follows SOLID principles. This isn't just a checklist—SOLID helps us identify design weaknesses before they become problems.
 
-**Single Responsibility:**
-- `Member` handles member data and credit management
-- `FitnessClass` handles class capacity and waitlist logic
-- `MembershipType` handles membership rules
+**Why check SOLID now?** Because if our domain model violates these principles, the rest of our architecture will inherit those flaws. Better to catch them early.
 
-✅ Each class has one reason to change.
+### Single Responsibility Principle
 
-**Open/Closed:**
-- Want a new membership type? Add a new enum value and implement `can_join_waitlist()`
-- Want different waitlist rules? Override the method
+Each class should have one reason to change.
 
-✅ Extensible without modifying existing code.
+- `Member` handles member data and credit management (changes when member rules change)
+- `FitnessClass` handles class capacity and waitlist logic (changes when booking rules change)
+- `MembershipType` handles membership rules (changes when membership tiers change)
 
-**Liskov Substitution:**
-- Not applicable here—we're using value objects and entities, not inheritance hierarchies
+✅ Each class has one reason to change. If we need to change how waitlists work, we only touch `FitnessClass`. If we add a new membership tier, we only touch `MembershipType`.
 
-**Interface Segregation:**
+### Open/Closed Principle
+
+Classes should be open for extension but closed for modification.
+
+- Want a new membership type (e.g., "ELITE")? Add a new enum value and implement `can_join_waitlist()` and `credits_per_month` for it
+- Want different waitlist rules? Extend the logic without rewriting the core behavior
+
+✅ Extensible without modifying existing code. This is why we used an enum with methods instead of scattered if-statements.
+
+### Liskov Substitution Principle
+
+Not applicable here—we're using value objects and entities, not inheritance hierarchies. This principle matters when you have polymorphism.
+
+### Interface Segregation Principle
+
+Clients shouldn't depend on methods they don't use.
+
 - `Member` has focused methods: `can_join_waitlist()`, `deduct_credit()`, `refund_credit()`
 - `FitnessClass` has focused methods: `add_booking()`, `add_to_waitlist()`, `remove_booking()`
 
-✅ No bloated interfaces forcing unused methods.
+✅ No fat interfaces. Each method serves a clear purpose. The waitlist logic only needs `member.can_join_waitlist()`, not the entire Member API.
 
-**Dependency Inversion:**
+### Dependency Inversion Principle
+
+High-level modules shouldn't depend on low-level modules. Both should depend on abstractions.
+
 - The domain doesn't depend on infrastructure
 - It doesn't know about databases, APIs, or email services
+- Later, when we build the use case, it will depend on *port interfaces*, not concrete implementations
 
-✅ High-level policy (domain) independent of low-level details.
+✅ High-level policy (domain) is independent of low-level details. This is what makes our domain testable and flexible.
+
+**The SOLID check passed.** Our domain model is well-designed because we let the tests and business rules guide us, not because we followed a template.
 
 ## Step 4: Build the Use Case (Application Layer)
 
-The domain handles the rules. Now we need a use case to orchestrate the workflow: "Book a class with waitlist support."
+The domain handles the business rules. But something needs to orchestrate the complete workflow: fetching members and classes from storage, applying the domain logic, saving changes, and sending notifications.
+
+This is the **use case**—the application layer that coordinates everything without containing business rules itself.
+
+**What does this use case need to do?**
+1. Fetch the member and class from repositories
+2. Try to book the class
+3. If the class is full and the member is premium, add them to the waitlist
+4. Save the changes
+5. Send appropriate notifications (confirmation or waitlist notice)
+
+**Why not put this in the domain?** Because these are application concerns. The domain shouldn't know about persistence or notifications—that would violate dependency inversion.
+
+Let's build it:
 
 ```python
 # application/book_class_use_case.py

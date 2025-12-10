@@ -1,7 +1,14 @@
 # Intentional Architecture in Python
 A Pragmatic Guide to Layers, Patterns, and Design Decisions
 
----
+<p align="center">
+  <img src="cover.png" alt="book cover - intentional architecture in python" width="300">
+</p>
+
+<p align="center">
+  <a href="">Buy on Amazon</a> | <a href="">Buy on Lulu</a> | <a href="#contents">Read free online</a>
+</p>
+
 
 You know how to write code that works. But somewhere between "it runs" and "it's maintainable," things fall apart. Functions grow unwieldy. Classes become tangled. Changes that should be simple ripple across your codebase. You've heard terms like Clean Architecture and Domain-Driven Design, but when you tried to learn them, the gap between theory and practice felt impossibly wide.
 
@@ -23,15 +30,6 @@ Every chapter builds on the last. Every pattern is motivated by a real problem. 
 By the end, you won't just know the patterns, you'll understand when to apply them, when to skip them, and how to make architectural decisions with intention.
 
 **This book is for developers who want to move beyond tutorials and understand the fundamentals that last.**
-
-
-<p align="center">
-  <img src="cover.png" alt="book cover - intentional architecture in python" width="300">
-</p>
-
-<p align="center">
-  <a href="">Buy on Amazon</a> | <a href="">Buy on Lulu</a> | <a href="#contents">Read free online</a>
-</p>
 
 ## Contents
 
