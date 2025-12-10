@@ -1059,7 +1059,7 @@ def create_member():
         member_id=generate_id(),
         name=data['name'],
         email=EmailAddress(data['email']),
-        membership_type=MembershipType('basic', 5, 10.0)
+        membership_type=MembershipType('basic', 10, 10.0)
     )
     member_repo.save(member)
     return jsonify({'id': member.id}), 201

@@ -384,7 +384,7 @@ def create_member(member_id, name, email, membership_type):
         'name': name,
         'email': email,
         'membership_type': membership_type,
-        'credits': 10 if membership_type == 'premium' else 5
+        'credits': 20 if membership_type == 'premium' else 10
     }
     return members[member_id]
 
