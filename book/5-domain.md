@@ -169,11 +169,13 @@ This is what richness means: the domain understands the rules and refuses to bre
 
 ## Entities: Identity and Lifecycle
 
-Entities have identity; value objects don't. Two members named "Sarah" are different people (entities). Two time slots from 10-11am on Monday are identical (value objects).
+Here's the difference: Two members named "Sarah" are different people. But two time slots from 10-11am on Monday? Those are the same time slot.
 
-Entities are objects defined by their identity, not their attributes. A member with ID "M001" named "Sarah" is still the same member even if she changes her email, updates her membership type, or modifies her name. The identity persists through changes.
+The first has identity. The second doesn't.
 
-Two members with the name "Sarah" and email "sarah@example.com" are not the same member. They're different people who happen to share attributes. What distinguishes them is identity—an ID, a unique identifier that tracks them through their lifecycle.
+A member with ID "M001" named "Sarah" is still the same member even if she changes her email, updates her membership type, or modifies her name. The ID persists through changes.
+
+Two members with the name "Sarah" and email "sarah@example.com"? Still different people who happen to share attributes. The ID makes them distinct—it tracks them through their lifecycle.
 
 Here's `Member` evolved from Chapter 3 into a proper entity:
 
@@ -296,21 +298,37 @@ class InsufficientCreditsException(Exception):
     pass
 ```
 
+**Evolution Note:** We're refining our credit allocation from earlier simplified examples (10/5 credits) to more realistic values (20/10). This kind of domain model refinement is natural as your understanding deepens—it's not changing requirements, it's better capturing them.
+
 Notice what happened. `Member` isn't just a data holder anymore. It understands membership rules. Credits expire. You can't go negative. Renewal resets the credits. Email addresses must be valid.
 
 The business logic lives in the entity. Not in some external service. If the rule involves member state, it belongs here.
 
 The same applies to `FitnessClass`. It's an entity. It has identity (the `class_id`). Two yoga classes scheduled at different times are different classes, even if they share the same name and capacity.
 
-Entities are distinguished by identity. They evolve. They protect their invariants.
+Entities have identity. They change over time. They guard their own rules.
+
+---
+
+**CHECKPOINT: Entities**
+
+You've learned that entities are domain objects with identity that persists through changes. Key takeaways:
+- **Identity matters:** Two members with the same name are different people—ID distinguishes them
+- **Mutable by nature:** Members can change email, upgrade membership, but remain the same member
+- **Self-protecting:** Entities enforce their own invariants (e.g., Member validates credits, email)
+- **Lifecycle aware:** Entities track their state and transitions (e.g., membership renewal)
+
+**When to use entities:** When an object's identity matters more than its current attributes—users, orders, bookings, anything that needs to be tracked individually over time.
+
+---
 
 ## Value Objects: Concepts Without Identity
 
-Value objects are the opposite of entities: they're defined entirely by their attributes, not by identity.
+Value objects flip the script: they're all about their attributes. No identity. No tracking.
 
-Consider a time slot: 10:00 AM to 11:00 AM on Monday. If you have two time slots with those exact values, they're the same time slot. There's no "identity" to track—no ID, no lifecycle. The attributes are the thing. If the attributes match, the value objects are identical and interchangeable.
+Take a time slot: 10:00 AM to 11:00 AM on Monday. If you have two time slots with those exact values, they're the same time slot. No "identity" to track. No ID. No lifecycle. The attributes are the whole story. If the attributes match, the value objects are identical and swappable.
 
-These are value objects. They're immutable. They're interchangeable. Two value objects with the same attributes are equal, by definition.
+That's what makes them value objects. Immutable. Interchangeable. Two with the same values are equal—that's the definition.
 
 Here's `TimeSlot`:
 
@@ -513,7 +531,28 @@ domain/
 
 Start with this structure. Refactor to fully nested (subdirectories per aggregate) if you grow to 20+ domain classes or have multiple bounded contexts.
 
+---
+
+**CHECKPOINT: Value Objects**
+
+You've learned that value objects are domain objects defined entirely by their attributes, with no identity. Key takeaways:
+- **Immutable by design:** Two TimeSlots with the same day/hours are identical and interchangeable
+- **No identity needed:** If attributes match, the objects are equal—no ID required
+- **Encapsulate behavior:** TimeSlot knows how to check overlap, calculate duration
+- **Make invalid states impossible:** ClassCapacity enforces 1-50 range at construction
+- **Replace primitive obsession:** Use EmailAddress instead of string, ClassCapacity instead of int
+
+**When to use value objects:** For concepts defined by their data (money, dates, addresses, measurements)—anything where "sameness" means "same values" rather than "same thing."
+
+---
+
 ## Aggregates
+
+> **💡 Take a Break If Needed**
+> 
+> Aggregates are the most advanced pattern in this chapter. They coordinate multiple objects to maintain business rule consistency. If you're feeling overwhelmed, that's normal—this concept takes time to internalize.
+>
+> Consider taking a break here, letting entities and value objects settle in your mind first. When you're ready, aggregates will make sense as the natural next step for handling multi-object operations. These patterns are dense but worth understanding.
 
 You've built entities. You've built value objects. `Member` protects its email. `FitnessClass` enforces capacity. `EmailAddress` won't let you create an invalid address. Each object guards its own rules.
 
@@ -807,6 +846,23 @@ The `ClassSchedulingService` contains logic that involves multiple domain object
 Domain services are different from use cases. Use cases coordinate workflows ("book a class"). Domain services implement business logic that crosses entity boundaries ("can this class be scheduled in this room?").
 
 Use domain services sparingly. Most logic should live in entities or value objects. But when logic genuinely doesn't fit, don't force it. Create a domain service.
+
+---
+
+**CHECKPOINT: Aggregates and Domain Services**
+
+You've learned how to handle multi-object consistency and cross-cutting domain logic. Key takeaways:
+- **Aggregates define consistency boundaries:** One root entity coordinates changes to related objects
+- **Reference by ID:** Aggregates store IDs of other aggregates, not full objects (keeps boundaries clear)
+- **Booking aggregate example:** Manages booking lifecycle independently of Member and FitnessClass
+- **Domain services for cross-entity logic:** ClassSchedulingService coordinates class/room scheduling
+- **Keep aggregates small:** Only include what needs to change together atomically
+
+**When to use aggregates:** When multiple objects must change together consistently (order with line items, booking with member/class references). The aggregate root controls all modifications.
+
+**When to use domain services:** When business logic involves multiple entities but doesn't naturally belong to any one of them (scheduling conflicts, complex validations spanning objects).
+
+---
 
 ### Business Rules vs Application Policies
 
@@ -1266,19 +1322,40 @@ We built a rich domain for the gym booking system because the requirements deman
 
 Architecture serves the problem. Not the resume.
 
+## Quick Reference: Pattern Decision Guide
+
+When building your domain, use this table to decide which pattern fits your needs:
+
+| **Pattern** | **What It Is** | **When to Use It** | **Gym Example** |
+|-------------|----------------|-------------------|-----------------|
+| **Entity** | Object with identity that persists through changes | Object's identity matters more than its current state—needs to be tracked individually over time | `Member`, `FitnessClass`—same member even after changing email |
+| **Value Object** | Immutable object defined entirely by its attributes | Concept defined by its data with no need for identity—"sameness" means "same values" | `TimeSlot`, `EmailAddress`, `ClassCapacity`—10am-11am Monday is always identical |
+| **Aggregate** | Consistency boundary with one root entity coordinating related objects | Multiple objects must change together atomically—need transactional consistency | `Booking`—manages booking lifecycle with references to Member and Class |
+| **Domain Service** | Stateless object implementing business logic across entities | Logic involves multiple objects but doesn't naturally belong to any single entity | `ClassSchedulingService`—coordinates room and time conflicts across classes |
+| **Domain Exception** | Business-meaningful exception for rule violations | Business rule violated (not just validation)—need to communicate specific business scenario | `ClassFullException`, `InsufficientCreditsException`—actionable business events |
+
+**Decision tree:**
+1. **Does the object need an ID that persists through changes?** → Entity
+2. **Is the object just data with no lifecycle?** → Value Object
+3. **Do multiple objects need to change together consistently?** → Aggregate
+4. **Does logic span multiple entities without belonging to one?** → Domain Service
+5. **Is a business rule violated?** → Domain Exception
+
+**Remember:** Start simple. Don't create value objects for every field or aggregates for every relationship. Let real complexity and pain drive these decisions. The patterns serve the problem, not the other way around.
+
 ## Summary
 
 We've built a complete domain layer. Not just data containers, but a rich model where objects understand and enforce business rules.
 
-**Entities** have identity. `Member` and `FitnessClass` are distinguished by their IDs, not their attributes. They change over time while maintaining continuity. They protect their own invariants—you can't create a member without an ID, and you can't modify credits arbitrarily.
+**Entities** have identity. `Member` and `FitnessClass` are tracked by their IDs, not their attributes. They change over time while staying the same object. They protect their own rules—you can't create a member without an ID, and you can't mess with credits arbitrarily.
 
-**Value objects** are defined by their attributes. `TimeSlot`, `EmailAddress`, and `ClassCapacity` are value objects with no identity. Two time slots with the same day and times are identical. `MembershipType` is an enum-based value object with predefined types (BASIC, PREMIUM) and associated behavior. Value objects are immutable and make invalid states impossible to construct.
+**Value objects** are all about their attributes. `TimeSlot`, `EmailAddress`, and `ClassCapacity` have no identity. Two time slots with the same day and times? They're the same object. `MembershipType` is an enum-based value object with types (BASIC, PREMIUM) and associated behavior. Value objects are immutable. You can't construct invalid ones.
 
-**Aggregates** define consistency boundaries. `Booking` is an aggregate root that manages the booking lifecycle independently of `Member` and `FitnessClass`. It references other aggregates by ID, keeping boundaries clear and preventing tightly coupled object graphs. The aggregate enforces its invariants—you can't cancel a booking less than 2 hours before class time, and you can't mark a cancelled booking as attended.
+**Aggregates** draw consistency boundaries. `Booking` is an aggregate root that manages the booking lifecycle independently of `Member` and `FitnessClass`. It references other aggregates by ID, keeping boundaries clean and preventing tangled object graphs. The aggregate enforces its rules—you can't cancel a booking less than 2 hours before class time, and you can't mark a cancelled booking as attended.
 
-**Domain services** handle logic that doesn't fit naturally into entities. `ClassSchedulingService` coordinates class scheduling across multiple objects and rooms. It's still domain logic, just not tied to a single entity. Use domain services sparingly, but don't force logic where it doesn't belong.
+**Domain services** handle logic that doesn't fit into entities. `ClassSchedulingService` coordinates class scheduling across multiple objects and rooms. It's still domain logic, just not tied to a single entity. Use domain services sparingly, but don't force logic where it doesn't belong.
 
-**Domain exceptions** speak the language of the business. `ClassFullException`, `InsufficientCreditsException`, `BookingNotCancellableException`—these aren't technical errors, they're business scenarios. The application layer can respond to each one appropriately.
+**Domain exceptions** speak the business language. `ClassFullException`, `InsufficientCreditsException`, `BookingNotCancellableException`—these aren't technical errors, they're business scenarios. The application layer can respond to each one appropriately.
 
 We organised our domain code using a hybrid structure. Entities live in `domain/entities/`. Value objects live in `domain/value_objects/`. Exceptions are collected in `domain/exceptions.py`. This structure is simple enough to understand immediately but organised enough to scale as the domain grows.
 

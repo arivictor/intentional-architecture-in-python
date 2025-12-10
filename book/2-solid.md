@@ -92,7 +92,7 @@ class Member:
         self.name = name
         self.email = email
         self.membership_type = membership_type
-        self.bookings = []
+        self.bookings = []  # List of FitnessClass objects this member has booked
     
     def book_class(self, fitness_class):
         if len(fitness_class.bookings) >= fitness_class.capacity:
@@ -134,7 +134,7 @@ class Member:
         self.name = name
         self.email = email
         self.membership_type = membership_type
-        self.bookings = []
+        self.bookings = []  # List of FitnessClass objects this member has booked
 
 
 class PricingService:
@@ -169,9 +169,12 @@ class BookingService:
 Now `Member` represents member data. One responsibility. If you need to add a phone number or track membership duration, you change `Member`. Nothing else.
 
 **Note:** The Member class here is what we call an **anemic domain model**—
-it holds data but delegates all logic to services. This is fine for 
-demonstrating SOLID, but Chapter 5 will show how to enrich domain objects 
-with behavior. For now, focus on the separation of responsibilities.
+a class that holds data but contains little or no business logic, delegating 
+all behavior to services. While this approach can feel wrong (shouldn't objects 
+have behavior?), it's a valid starting point and works well for demonstrating 
+SOLID principles. In Chapter 5, we'll explore when and how to enrich domain 
+objects with behavior, moving beyond simple data containers. For now, focus 
+on the separation of responsibilities.
 
 Pricing lives in `PricingService`. If pricing rules change, that's the only place you look. Booking coordination lives in `BookingService`. Notifications live elsewhere.
 
@@ -375,6 +378,8 @@ def process_booking(membership: Membership, fitness_class):
 ```
 
 It works the same whether you pass `RegularMembership` or `GuestPass`. No special cases. No surprises. That's Liskov Substitution.
+
+**Why this matters practically:** Without this principle, every function that accepts a parent type needs defensive checks for every possible subtype. Your codebase fills with `if isinstance(obj, GuestPass)` conditions. When you add a new membership type, you hunt through the entire codebase updating those checks. Liskov Substitution prevents this coupling—polymorphism becomes a tool for extension, not a source of bugs.
 
 Yes, we added a `can_book()` method. Yes, that's more code. But look at what we gained: you can now add ten different membership types without changing any code that processes bookings. Each type encapsulates its own booking rules. The complexity is contained, not scattered.
 
@@ -636,6 +641,8 @@ Use them when complexity appears. When change becomes painful. When you find you
 
 We've worked with isolated examples here. Simple classes. Focused demonstrations. The gym booking system exists in fragments: a `Member` class here, a `BookingService` there, pricing strategies scattered across examples.
 
-In the next chapter, we'll bring structure to this. We'll talk about layers. How to organise a codebase so that these principles have room to breathe. How to separate concerns at a system level, not just a class level.
+We've learned to write focused classes with clear dependencies. Each class has a single responsibility. We can extend behavior without modifying existing code. Our abstractions let us swap implementations. But as our system grows, even well-designed classes need organization. Where does `Member` live? Where does `BookingService` go? How do we keep database code separate from business logic? When you have thirty classes following SOLID principles, you still need to answer: how do they fit together?
+
+That's where layers come in. In the next chapter, we'll bring structure to this scattered collection of classes. We'll talk about layers—how to organize a codebase so that these principles have room to breathe. How to separate concerns at a system level, not just a class level. SOLID taught us to write good classes. Layers will teach us how to organize them.
 
 For now, you've learned to think about responsibilities, extension points, substitution, focused interfaces, and inverted dependencies. That's the foundation. Everything else builds on this.
