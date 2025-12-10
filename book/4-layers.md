@@ -132,10 +132,10 @@ We'll separate our code into four layers:
 **The dependency rule:** Dependencies flow inward toward the domain.
 - Domain depends on nothing (no imports from other layers)
 - Application depends on domain only
-- Infrastructure *implements* domain-defined abstractions (ports/interfaces), never depends on concrete domain entities
+- Infrastructure implements abstractions defined by domain (imports interfaces, not business logic)
 - Interface depends on application and infrastructure (to execute use cases and wire up adapters)
 
-**Important nuance about infrastructure:** Infrastructure doesn't directly depend on domain entities. Instead, the domain defines abstractions (like repository interfaces), and infrastructure implements them. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
+**Important nuance about infrastructure:** Infrastructure implements abstractions defined by the domain. The domain defines what it needs (like a repository interface), and infrastructure provides concrete implementations. Infrastructure imports domain entities for persistence operations, but never contains business logic. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
 
 > **Forward Reference:** We introduce the repository concept here, but the full implementation using ports and adapters comes in Chapter 7. For now, understand that repositories mediate between domain and data storage.
 
@@ -394,25 +394,64 @@ class Member:
         self.name = name
         # Just business logic, no database
 
-# Infrastructure: infrastructure/member_repository.py
-class MemberRepository:
+# Domain: domain/member_repository.py (interface/protocol)
+from abc import ABC, abstractmethod
+from typing import Optional
+from domain.member import Member
+
+class MemberRepository(ABC):
     """
-    Repository pattern: Mediates between domain and data storage.
-    Keeps persistence logic out of domain entities.
+    Repository interface: Defines what the domain needs for persistence.
+    The domain defines the interface, infrastructure provides the implementation.
+    """
+    @abstractmethod
+    def save(self, member: Member):
+        pass
     
-    Note: We introduce the repository concept here, but the full 
-    implementation using ports and adapters comes in Chapter 7. 
-    For now, understand that repositories mediate between domain 
-    and data storage.
+    @abstractmethod
+    def find_by_id(self, member_id: str) -> Optional[Member]:
+        pass
+
+# Infrastructure: infrastructure/sqlite_member_repository.py
+import sqlite3
+from typing import Optional
+from domain.member import Member
+from domain.member_repository import MemberRepository
+
+class SqliteMemberRepository(MemberRepository):
+    """
+    Concrete implementation: SQLite-specific persistence logic.
+    Implements the interface defined by the domain.
     """
     def save(self, member: Member):
         conn = sqlite3.connect('gym.db')
-        # Database code lives here
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO members (id, name, email) VALUES (?, ?, ?)",
+            (member.id, member.name, member.email)
+        )
+        conn.commit()
+        conn.close()
+    
+    def find_by_id(self, member_id: str) -> Optional[Member]:
+        conn = sqlite3.connect('gym.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, email FROM members WHERE id = ?", (member_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            # Note: In a real implementation, you'd also load the pricing strategy
+            # from the database. We'll cover this in Chapter 7.
+            return Member(member_id=row[0], name=row[1], email=row[2], pricing_strategy=None)
+        return None
 ```
 
 **Benefit:** Test `Member` with nothing but Python. Swap SQLite for PostgreSQL by changing one file.
 
-**The Repository Pattern:** Instead of domain entities knowing how to save themselves (`member.save()`), we use a repository object that knows how to persist entities. The domain defines what to persist (the `Member` entity), and infrastructure defines how (the `MemberRepository`). This separation is key to the dependency rule—domain doesn't depend on infrastructure. We'll explore repository interfaces (ports) fully in Chapter 7.
+**The Repository Pattern:** Instead of domain entities knowing how to save themselves (`member.save()`), we use a repository object that knows how to persist entities. The domain defines the repository interface (what operations are needed), and infrastructure provides concrete implementations (how those operations work). This separation is key to the dependency rule—domain doesn't depend on infrastructure. We'll explore repository interfaces (ports) fully in Chapter 7.
+
+> **Note:** We introduce the repository concept here to show the separation of concerns, but the full implementation using ports and adapters comes in Chapter 7. For now, understand that repositories mediate between domain and data storage, with the interface defined in the domain and implementation in infrastructure.
 
 ---
 
