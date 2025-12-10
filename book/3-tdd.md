@@ -607,6 +607,24 @@ TDD is powerful. But it's not always the right tool.
 
 TDD is a tool. Use it when it helps. Skip it when it doesn't.
 
+## From Tests to Structure
+
+You've built a solid testing foundation. Your gym booking system has tests for member creation, class bookings, credit deduction, and waitlist management. The red-green-refactor rhythm guides your development. Each test passes. The code works.
+
+But as the system grows, a new challenge emerges. Your tests are getting harder to write.
+
+To test booking logic, you need a database. To test notifications, you need an email server. To test API endpoints, you need the full HTTP stack running. Each test requires more setup. More dependencies. More infrastructure that has nothing to do with the business rules you're trying to verify.
+
+The tests are telling you something. They're saying: "This code is too tangled."
+
+TDD revealed the need for better structure. The domain logic—member rules, class capacity, pricing strategies—is mixed with infrastructure concerns like database persistence and email sending. Your tests want to verify business rules, but they're forced to set up technical infrastructure.
+
+**This is the signal.** When tests become difficult to write, when you can't test business logic in isolation, when infrastructure leaks into your domain—that's when you need architectural boundaries.
+
+The next chapter introduces those boundaries. We'll separate business logic from technical details. We'll organise code into layers that let you test domain rules without databases, write use cases without HTTP, and swap infrastructure without touching business logic.
+
+TDD got you here. It showed you what works and what doesn't. It built your confidence to refactor. Now it's telling you that the code needs structure—not because of architectural dogma, but because the tests are asking for it.
+
 ## Summary
 
 TDD is the foundation of intentional architecture. It gives you:
