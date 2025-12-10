@@ -92,7 +92,7 @@ class Member:
         self.name = name
         self.email = email
         self.membership_type = membership_type
-        self.bookings = []
+        self.bookings = []  # List of FitnessClass objects this member has booked
     
     def book_class(self, fitness_class):
         if len(fitness_class.bookings) >= fitness_class.capacity:
@@ -134,7 +134,7 @@ class Member:
         self.name = name
         self.email = email
         self.membership_type = membership_type
-        self.bookings = []
+        self.bookings = []  # List of FitnessClass objects this member has booked
 
 
 class PricingService:
