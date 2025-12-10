@@ -52,11 +52,12 @@ By the end, you won't just know the patterns, you'll understand when to apply th
 * Chapter 5: [Domain Modeling (DDD)](book/5-domain.md)
 * Chapter 6: [Use Cases & Application Layer](book/6-use-cases.md)
 * Chapter 7: [Ports & Adapters (Hexagonal Architecture)](book/7-ports-adapters.md)
+* Chapter 8: [Interface Layer - Building an API](book/8-interface-layer.md)
 
 ### Part IV: Integration (Bring It All Together)
 
-* Chapter 8: [Putting It All Together](book/8-putting-it-together.md)
-* Chapter 9: [Conclusion](book/9-conclusion.md)
+* Chapter 9: [Putting It All Together](book/9-putting-it-together.md)
+* Chapter 10: [Conclusion](book/10-conclusion.md)
 
 ### Appendices 
 

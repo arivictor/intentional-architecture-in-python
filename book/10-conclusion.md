@@ -1,8 +1,8 @@
-# Chapter 9: Conclusion
+# Chapter 10: Conclusion
 
 Remember the script from Chapter 1? Everything in one place. Member data, class bookings, business rules, database calls—all tangled together. It worked, but every change rippled unpredictably. Testing meant running the whole thing. Understanding it meant holding the entire structure in your head.
 
-Now look at Chapter 8. The same gym booking system, but intentionally structured. Domain models that enforce business rules. Use cases that orchestrate workflows without containing logic. Ports that let you swap infrastructure. Tests at every level that let you change with confidence.
+Now look at Chapter 9. The same gym booking system, but intentionally structured. Domain models that enforce business rules. Use cases that orchestrate workflows without containing logic. Ports that let you swap infrastructure. Tests at every level that let you change with confidence.
 
 The difference isn't complexity for its own sake. It's control. The first version is hostage to its own structure. The second gives you options. When requirements change—and they will—you know exactly where to look and what to modify. That's what intentional architecture buys you.
 

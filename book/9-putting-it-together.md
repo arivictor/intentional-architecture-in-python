@@ -1,4 +1,4 @@
-# Chapter 8: Putting It All Together
+# Chapter 9: Putting It All Together
 
 You've learned the pieces. TDD guides your design. SOLID shapes your classes. Layers organize your codebase. Domain models enforce business rules. Use cases orchestrate workflows. Ports and adapters decouple infrastructure.
 
