@@ -638,4 +638,6 @@ The chapters that follow—layers, domain modeling, ports and adapters—build o
 
 Start simple. Write a failing test. Make it pass. Clean it up. Repeat.
 
+We've built domain objects through TDD. `Member`, `FitnessClass`, `Booking`—each tested and focused. But as we add persistence, APIs, and infrastructure, we'll discover these objects need organization. That's where layers come in.
+
 That's how architecture happens.
