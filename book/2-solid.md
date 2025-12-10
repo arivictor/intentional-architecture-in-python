@@ -636,6 +636,8 @@ Use them when complexity appears. When change becomes painful. When you find you
 
 We've worked with isolated examples here. Simple classes. Focused demonstrations. The gym booking system exists in fragments: a `Member` class here, a `BookingService` there, pricing strategies scattered across examples.
 
-In the next chapter, we'll bring structure to this. We'll talk about layers. How to organise a codebase so that these principles have room to breathe. How to separate concerns at a system level, not just a class level.
+We've learned to write focused classes with clear dependencies. Each class has a single responsibility. We can extend behavior without modifying existing code. Our abstractions let us swap implementations. But as our system grows, even well-designed classes need organization. Where does `Member` live? Where does `BookingService` go? How do we keep database code separate from business logic? When you have thirty classes following SOLID principles, you still need to answer: how do they fit together?
+
+That's where layers come in. In the next chapter, we'll bring structure to this scattered collection of classes. We'll talk about layers—how to organize a codebase so that these principles have room to breathe. How to separate concerns at a system level, not just a class level. SOLID taught us to write good classes. Layers will teach us how to organize them.
 
 For now, you've learned to think about responsibilities, extension points, substitution, focused interfaces, and inverted dependencies. That's the foundation. Everything else builds on this.
