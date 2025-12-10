@@ -6,7 +6,7 @@ A Pragmatic Guide to Layers, Patterns, and Design Decisions
 </p>
 
 <p align="center">
-  <a href="">Buy on Amazon</a> | <a href="">Buy on Lulu</a> | <a href="#contents">Read free online</a>
+  <a href="https://amazon.com">Buy on Amazon</a> | <a href="https://www.lulu.com">Buy on Lulu</a> | <a href="https://leanpub.com">Buy on Leanpub</a> | <a href="#contents">Read free online</a>
 </p>
 
 
