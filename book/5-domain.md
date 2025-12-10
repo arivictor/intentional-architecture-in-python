@@ -544,11 +544,9 @@ You've learned that value objects are domain objects defined entirely by their a
 
 > **💡 Take a Break If Needed**
 > 
-> Aggregates are the most advanced pattern in this chapter. They coordinate multiple objects to maintain business rule consistency. If you're feeling overwhelmed, that's normal—this concept takes time to internalize. 
+> Aggregates are the most advanced pattern in this chapter. They coordinate multiple objects to maintain business rule consistency. If you're feeling overwhelmed, that's normal—this concept takes time to internalize.
 >
-> Consider taking a break here, letting entities and value objects settle in your mind first. When you're ready, aggregates will make sense as the natural next step for handling multi-object operations.
->
-> These patterns are dense but worth understanding.
+> Consider taking a break here, letting entities and value objects settle in your mind first. When you're ready, aggregates will make sense as the natural next step for handling multi-object operations. These patterns are dense but worth understanding.
 
 You've built entities. You've built value objects. `Member` protects its email. `FitnessClass` enforces capacity. `EmailAddress` won't let you create an invalid address. Each object guards its own rules.
 
@@ -1326,8 +1324,8 @@ When building your domain, use this table to decide which pattern fits your need
 |-------------|----------------|-------------------|-----------------|
 | **Entity** | Object with identity that persists through changes | Object's identity matters more than its current state; needs to be tracked individually over time | `Member`, `FitnessClass`—same member even after changing email |
 | **Value Object** | Immutable object defined entirely by its attributes | Concept defined by its data with no need for identity; "sameness" means "same values" | `TimeSlot`, `EmailAddress`, `ClassCapacity`—10am-11am Monday is always identical |
-| **Aggregate** | Consistency boundary with one root entity coordinating related objects | Multiple objects must change together atomically; need transactional consistency | `Booking`—manages booking lifecycle with references to Member/Class |
-| **Domain Service** | Stateless object implementing business logic across entities | Logic involves multiple objects but doesn't naturally belong to any single entity | `ClassSchedulingService`—coordinates room/time conflicts across classes |
+| **Aggregate** | Consistency boundary with one root entity coordinating related objects | Multiple objects must change together atomically; need transactional consistency | `Booking`—manages booking lifecycle with references to Member and Class |
+| **Domain Service** | Stateless object implementing business logic across entities | Logic involves multiple objects but doesn't naturally belong to any single entity | `ClassSchedulingService`—coordinates room and time conflicts across classes |
 | **Domain Exception** | Business-meaningful exception for rule violations | Business rule violated (not just validation); need to communicate specific business scenario | `ClassFullException`, `InsufficientCreditsException`—actionable business events |
 
 **Decision tree:**
