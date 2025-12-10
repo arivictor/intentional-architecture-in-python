@@ -377,61 +377,80 @@ Address the terminology and transition issues, add bridging paragraphs where not
 **AUDIENCE CHECK**
 
 ✅ Strengths:
-- Starts with concrete pain: where do complex rules go?
-- Clear progression: anemic model → rich model
-- Entities, value objects, aggregates explained with code
-- Each pattern motivated by a problem
+- **Excellent opening:** Starts with concrete pain - "where does this logic go?"
+- **Clear progression:** Anemic model problem → rich model solution
+- **Good terminology callback:** Line 63 properly explains "anemic domain model" that was mentioned in Ch 2
+- **Entities, value objects, aggregates:** Each pattern explained with gym booking examples
+- **ClassCapacity value object** (lines 98-111): Perfect example of making invalid states impossible
 
 ⚠️ Issues:
-- DDD jargon (entities, value objects, aggregates, repositories, domain services) all introduced in one chapter - may overwhelm
-- Aggregate concept is complex and might need more explanation
+- **DDD jargon density:** Entities, value objects, aggregates, domain services, bounded contexts all in one chapter
+- **Multiple Member class evolutions:** Lines 21, 223, 1016, 1231 - shows progression but may confuse
+- **Aggregate concept complexity:** Advanced pattern for intermediate developers
 
 📝 Recommendations:
-- Consider explicit sub-section headings for each pattern
-- Add a "DDD Patterns Summary" table at the end
+- Add summary table at end mapping each pattern to when to use it
+- Add section breaks or "checkpoint" summaries between major patterns
+- Consider callout box: "Take a break if needed - these patterns are dense but worth understanding"
 
 **TONE CHECK**
 
 ✅ Strengths:
-- Maintains conversational tone
-- Acknowledges complexity: "This is dense - take your time"
+- **Conversational opening:** "The code is asking for a richer domain"
+- **Clear explanations:** "This is what richness means: the domain understands the rules and refuses to break them"
+- **Pragmatic:** "The domain will stop being a passive data holder and become an active participant"
 
 ⚠️ Issues:
-- Slightly more academic in the "Aggregates" section (around line 200+ based on patterns)
-- Could benefit from more "why this matters to you" moments
+- **Slightly academic in places:** Aggregate and bounded context sections use more formal language
+- **Could use more encouragement:** Dense material benefits from "you've got this" moments
 
 📝 Recommendations:
-- After explaining aggregates, add practical paragraph: "In practice, this means when you save a booking, you don't have to manually save the member and class separately..."
+- Add after aggregate section: "Aggregates feel complex at first, but you're already using this pattern when you save a Member with their Bookings together"
+- Ensure "when not to use" pragmatism for each pattern
 
 **FLOW CHECK**
 
 ✅ Strengths:
-- Logical progression through DDD patterns
-- Each pattern introduced when needed
+- **Logical build:** Anemic problem → entities → value objects → aggregates
+- **Good Chapter 4 callback:** Line 3 references layers from Ch 4
+- **Terminology reminder:** Line 5 callbacks the Introduction's three meanings of "domain"
 
 ⚠️ Issues:
-- Missing explicit connection back to Chapter 4 layers
+- **Could strengthen:** Connection between value objects and SOLID from Ch 2
+- **Missing:** Explicit transition to Chapter 6 at end
 
 📝 Recommendations:
-- Add callback: "Remember from Chapter 4, all this domain logic lives in the domain/ directory, never importing from infrastructure..."
+- Add after value objects: "Remember Single Responsibility from Chapter 2? EmailAddress is SRP applied at the value level"
+- Add ending transition: "With our rich domain in place, we need orchestration to coordinate these intelligent objects. That's where use cases come in..."
 
 **EXAMPLE CONSISTENCY CHECK**
 
-⚠️ Issues - **NEED TO READ FULL CHAPTER:**
-- Based on intro, this chapter introduces:
-  - Time slot conflicts
-  - Credit expiry (30 days)
-  - Cancellation rules (2-hour limit)
-  - Email validation
-  - Capacity validation (1-50)
+✅ Strengths:
+- **Member evolution shown:**
+  - Line 21: Simple anemic model (from Ch 3)
+  - Line 223: Adds MembershipType enum with credits_per_month, price
+  - Line 1016+: Full rich entity with credit expiry, booking limits
+- **FitnessClass evolution:**
+  - Line 78: Simple from Ch 3
+  - Line 114: Rich with ClassCapacity value object, proper encapsulation
+- **New business rules introduced:**
+  - Credits expire after 30 days (verified in Member class)
+  - Capacity 1-50 range (verified in ClassCapacity lines 100-103)
+  - 2-hour cancellation rule (need to verify in Booking)
+
+⚠️ Issues:
+- **MembershipType credits changed:** Ch 2 said "10 premium, 5 basic" but line 190-193 shows "20 premium, 10 basic"
+  - **INCONSISTENCY:** This is a significant change not acknowledged
 
 📝 Recommendations:
-- Need to verify these rules stay consistent through Chapters 6-9
+- **CRITICAL:** Add note explaining credit allocation change:
+  "Note: We've updated the credit allocation from our simple examples in earlier chapters (10/5) to more realistic values (20/10). This is natural evolution as we refine the domain model."
 
 **CHAPTER-SPECIFIC NOTES**
-- Dense chapter but necessary depth for domain modeling
-- Forward reference to Appendix A for aggregate design is good
-- The term "anemic domain model" finally explained (was mentioned in Ch 2)
+- **Strong chapter** - necessary depth for DDD concepts
+- **Critical finding:** Credit allocation changed without acknowledgment - needs fixing
+- **Good acknowledgment:** Anemic domain model properly explained (Ch 2 forward ref resolved)
+- **Forward references:** Multiple references to Appendix A for aggregate design
 
 ---
 
@@ -756,15 +775,17 @@ Address the terminology and transition issues, add bridging paragraphs where not
 - Ch 5: Likely became aggregate root *(need to verify)*
 
 **Business Rules Evolution:**
-| Rule | Introduced | Evolution |
-|------|------------|-----------|
-| Capacity limits | Ch 1 | ✅ Stable throughout |
-| Credits | Ch 1 (10 premium, 5 basic) | Ch 5 adds expiry |
-| Premium pricing (free) | Ch 2 | ✅ Stable |
-| Basic pricing ($10) | Ch 2 | ✅ Stable |
-| Waitlist | Ch 3 | Ch 9 full implementation |
-| Cancellation refund | Ch 1 | Ch 5 adds 2-hour rule |
-| Email validation | Ch 3 | ✅ Value object |
+| Rule | Introduced | Evolution | Status |
+|------|------------|-----------|--------|
+| Capacity limits | Ch 1 | Ch 5 adds 1-50 validation | ✅ Consistent |
+| Credits - Premium | Ch 1 (10 credits) | **Ch 5 (20 credits)** | ⚠️ **INCONSISTENT - NOT ACKNOWLEDGED** |
+| Credits - Basic | Ch 1 (5 credits) | **Ch 5 (10 credits)** | ⚠️ **INCONSISTENT - NOT ACKNOWLEDGED** |
+| Premium pricing (free) | Ch 2 | Ch 5 adds monthly fee $50 | Evolution makes sense |
+| Basic pricing ($10 per class) | Ch 2 | Ch 5 adds monthly fee $25 | Evolution makes sense |
+| Waitlist | Ch 3 | Ch 9 full implementation | ✅ Consistent concept |
+| Cancellation refund | Ch 1 | Ch 5 adds 2-hour rule | ✅ Logical evolution |
+| Email validation | Ch 3 | Ch 5 value object | ✅ Proper pattern |
+| Credit expiry | New in Ch 5 | 30 days | ✅ New rule clearly introduced |
 
 **Consistency Checks Needed:**
 1. Verify Member attributes stay consistent Ch 5-9
@@ -838,17 +859,22 @@ Ch 10: Conclusion ──────────────┘ (Reflection)
 
 ### MUST FIX (Blocks reader understanding)
 
-1. **[Ch 3 → Ch 4] Missing Transition**
+1. **[Ch 2 vs Ch 5] Credit Allocation Inconsistency**
+   - **Issue:** Ch 2/3/4 state premium members get 10 credits, basic get 5. Ch 5 changes to 20 premium, 10 basic without acknowledgment
+   - **Impact:** Reader notices contradiction, questions book's consistency
+   - **Fix:** Add note in Ch 5 when introducing MembershipType: "Note: We're evolving from our simplified examples (10/5 credits) to more realistic values (20/10). This kind of refinement is natural as domain understanding deepens."
+
+2. **[Ch 3 → Ch 4] Missing Transition**
    - **Issue:** Abrupt jump from TDD to Layers without explaining connection
    - **Impact:** Reader loses narrative thread
    - **Fix:** Add bridging paragraph at end of Ch 3 explaining how tests revealed need for organization
 
-2. **[Ch 2 → Ch 6] Service vs. Use Case Terminology Shift**
+3. **[Ch 2 → Ch 6] Service vs. Use Case Terminology Shift**
    - **Issue:** "BookingService" becomes "BookClassUseCase" without clear evolution
    - **Impact:** Reader confused about naming change
    - **Fix:** Make terminology shift explicit at start of Ch 6, explain rationale clearly
 
-3. **[Ch 4] Repository Pattern Forward Reference**
+4. **[Ch 4] Repository Pattern Forward Reference**
    - **Issue:** Repositories mentioned without explanation, forward ref to Ch 7
    - **Impact:** Reader sees code they don't understand yet
    - **Fix:** Add inline brief explanation: "Repositories mediate between domain and storage (we'll implement these in Chapter 7)"
