@@ -184,7 +184,9 @@ The difference: the interface layer translates and routes. The use case enforces
 
 Let's build an HTTP API for our gym booking system using Python's standard library. We'll start simple and add complexity progressively.
 
-### Step 1: Basic Server Setup
+Why this approach? Because understanding HTTP fundamentals makes learning any framework trivial. Once you see how routing, parsing, and serialization work at the bare-metal level, frameworks become obvious. You'll recognize what they're abstracting and appreciate what they do for you.
+
+### Basic Server Setup
 
 Python's `http.server` module provides everything we need to handle HTTP requests:
 
@@ -250,9 +252,11 @@ This is what frameworks do for you. Flask's `@app.route()` decorator? It's setti
 
 But now you see it. It's not magic. It's just HTTP.
 
-### Step 2: Routing
+### Routing
 
 Real APIs have multiple endpoints. We need routing—mapping URL paths to handlers.
+
+Why manually? Because when you see the pattern matching (`if self.path == '/api/classes'`), you understand what Flask's decorators and FastAPI's path operations are actually doing. They're just nicer syntax for the same concept.
 
 ```python
 class GymBookingHandler(BaseHTTPRequestHandler):
@@ -303,9 +307,11 @@ def create_booking():
 
 But underneath, they're doing exactly this: mapping paths to functions. The decorator is syntactic sugar. The concept is identical.
 
-### Step 3: Parsing Request Data
+### Parsing Request Data
 
-POST and PUT requests include data in the request body. We need to parse it:
+POST and PUT requests include data in the request body. We need to parse it.
+
+Why does this matter? Because understanding Content-Length headers, reading from socket streams, and parsing JSON teaches you what frameworks hide. When you debug a request parsing issue in production, you'll know what's actually happening.
 
 ```python
 class GymBookingHandler(BaseHTTPRequestHandler):
@@ -362,11 +368,13 @@ class GymBookingHandler(BaseHTTPRequestHandler):
 
 In Flask, this is just `request.json`. In FastAPI, it's automatic if you use Pydantic models. But the work is the same—they're reading Content-Length, reading from the socket, and parsing JSON.
 
-We're doing it manually to see what's happening. Once you've seen it, you'll appreciate frameworks more.
+We're doing it manually to see what's happening. Once you've seen it, you'll appreciate frameworks more. And you'll understand why they sometimes fail—network issues, encoding problems, malformed JSON.
 
-### Step 4: Calling Use Cases
+### Calling Use Cases
 
 This is where the interface layer connects to the application layer. This is the architectural boundary.
+
+Why is this important? Because this is where framework code meets your business logic. If you understand this boundary, you can switch frameworks without touching your domain or application layers. The interface is the only thing that changes.
 
 ```python
 from domain.exceptions import (
@@ -454,11 +462,15 @@ The interface layer is thin. It's almost mechanical:
 
 No business logic. No decisions about capacity or credits. Just translation and routing.
 
-### Step 5: Dependency Injection
+This pattern applies to every interface—CLI, GraphQL, message queues. Parse input. Call use case. Format output. Map errors. That's it.
+
+### Dependency Injection
 
 How do we give the handler access to use cases?
 
 We can't instantiate use cases inside the handler—they need repositories, which need database connections. We need to inject dependencies from the outside.
+
+Why this matters: Dependency injection is what makes our architecture work. The interface doesn't create its dependencies. It receives them. This keeps the interface layer thin and testable.
 
 For `BaseHTTPRequestHandler`, we use class attributes:
 

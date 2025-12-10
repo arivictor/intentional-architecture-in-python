@@ -41,7 +41,9 @@ You don't get to design in a vacuum. You have deadlines. You have team size. You
 
 Let's make this concrete. The same gym booking system, built under different constraints, produces radically different architectures.
 
-### Solo Developer vs. 50-Person Team
+### Team Size Constraints
+
+#### Solo Developer vs. 50-Person Team
 
 **Solo developer building a side project:**
 
@@ -78,7 +80,9 @@ class BookingService:
 
 The solo developer's architecture would drown the large team in confusion. The large team's architecture would paralyze the solo developer with overhead.
 
-### Greenfield vs. Legacy System
+### Project Maturity Constraints
+
+#### Greenfield vs. Legacy System
 
 **Greenfield project starting from scratch:**
 
@@ -118,7 +122,9 @@ class ModernBookingService:
 
 The greenfield approach would fail in legacy—you can't ignore existing systems. The legacy approach would slow down greenfield—you don't need to support what doesn't exist yet.
 
-### Startup vs. Enterprise
+### Organizational Stage Constraints
+
+#### Startup vs. Enterprise
 
 **Startup racing to find product-market fit:**
 
@@ -168,7 +174,7 @@ class BookingService:
 
 The startup approach would be reckless in enterprise. The enterprise approach would kill a startup's velocity.
 
-### The Pattern
+### Understanding the Pattern
 
 Different constraints demand different architectures. There is no "best" architecture. There's only the right architecture for your constraints.
 
@@ -183,6 +189,12 @@ The best architects don't fight constraints. They understand them, respect them,
 Your architecture should fit your constraints like a key fits a lock. Not because it's the "correct" architecture, but because it's the right one for where you are right now.
 
 This is why copying what Google does rarely works. Their constraints are not yours. Their problems are not yours. Your 5-person startup doesn't need Google's infrastructure. Your solo project doesn't need microservices. Build for the constraints you have, not the ones you imagine.
+
+### Why This Matters to You
+
+Before moving forward, pause and assess your own constraints honestly. Are you working solo or with a team? Is this a greenfield project or legacy code? Are you in a startup or enterprise? What are your actual time, budget, and scaling constraints?
+
+Your answers will guide every architectural decision you make. The patterns you'll learn in this book are tools, not mandates. Use them when they solve problems you actually have. Skip them when they don't. Let your constraints be your guide.
 
 ## Essential Complexity vs. Accidental Complexity
 
@@ -253,6 +265,8 @@ The danger isn't the pattern itself. The danger is applying it without asking wh
 Good architects know the patterns, but they also know when not to use them. They can articulate why a particular structure exists and what problem it solves. If you can't explain the tradeoff, you're cargo culting.
 
 Here's a real example. You're building a small internal tool for your team to track gym class bookings. It'll have maybe fifty users. You read about how Netflix uses microservices, so you decide to split your application into separate services:
+
+**Warning: This is cargo culting.** Your constraints are different from Netflix's. The following example shows what happens when you copy their solution without understanding why they need it.
 
 ```python
 import requests

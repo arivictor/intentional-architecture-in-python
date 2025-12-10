@@ -1277,17 +1277,21 @@ This is the adapter pattern. The port defines the interface the application expe
 
 The beauty of ports and adapters is swappability. The application depends on `MemberRepository`, an abstraction. We can implement that abstraction with any persistence mechanism we want. SQLite. JSON files. In-memory dictionaries. PostgreSQL. The application doesn't care.
 
-To demonstrate this, we'll build three different repository adapters for the same port:
+Why build multiple implementations? Because different contexts need different infrastructure. Tests need speed and isolation—in-memory is perfect. Local development needs persistence without external dependencies—JSON files work. Production needs reliability and scale—databases fit. Same port, different adapters, each optimized for its context.
 
-1. **In-memory repository adapter**: Simple dictionaries. Perfect for testing.
-2. **JSON file repository adapter**: Persistent but simple. No external dependencies.
-3. **SQLite repository adapter**: Real database using Python's standard library.
+To demonstrate this flexibility, we'll build three different repository adapters for the same port:
 
-Same repository port. Same contract. Three different adapter implementations. This is the power of the adapter pattern.
+1. **In-memory repository adapter**: Simple dictionaries. Fast. Perfect for testing. Zero setup.
+2. **JSON file repository adapter**: Persistent but simple. No external dependencies. Good for prototyping.
+3. **SQLite repository adapter**: Real database using Python's standard library. Production-ready for small to medium apps.
+
+Same repository port. Same contract. Three different adapter implementations. This is the power of the adapter pattern—choose the infrastructure that fits your needs without changing application code.
 
 #### Implementation 1: In-Memory Repository
 
-Let's start with the simplest adapter—an in-memory dictionary:
+Why start here? Because it's the simplest. No files. No network. No setup. Just Python data structures. This makes it perfect for tests—fast, isolated, and predictable.
+
+Let's build it:
 
 ```python
 # infrastructure/persistence/in_memory_member_repository.py
@@ -1330,11 +1334,13 @@ class InMemoryMemberRepository(MemberRepository):
 
 No database. No SQL. No ORM. Just a Python dictionary. The adapter implements the port's interface using whatever infrastructure makes sense.
 
-The use cases don't know. They call `repository.save(member)`. They don't know if it's going to a dictionary, a file, or a database. They don't care.
+Why does this work? Because the use cases don't know how storage works. They call `repository.save(member)`. Could be a dictionary. Could be a file. Could be a database. The port abstracts it. The adapter implements it.
 
 #### Implementation 2: JSON File Repository
 
-Now let's persist to disk using JSON files:
+In-memory is great for tests, but the data disappears when the program ends. What if you want persistence without installing a database? JSON files. Still simple. Still no dependencies. But your data survives restarts.
+
+This is perfect for prototyping, small tools, or local development where you want to poke around the data in a text editor.
 
 ```python
 # infrastructure/persistence/json_member_repository.py
@@ -1440,11 +1446,15 @@ class JsonMemberRepository(MemberRepository):
         }
 ```
 
-More infrastructure, same interface. The adapter handles file I/O. It serializes domain objects to JSON and deserializes them back. The application layer doesn't know this is happening.
+More infrastructure, same interface. The adapter handles file I/O. It serializes domain objects to JSON and deserializes them back. The application layer doesn't know this is happening. It just sees `MemberRepository`.
 
-Notice the translation methods: `_to_domain()` and `_to_dict()`. They're the bridge between domain objects and JSON data. Every adapter needs translation logic. The specifics depend on the infrastructure.
+Notice the translation methods: `_to_domain()` and `_to_dict()`. They're the bridge between domain objects and JSON data. This translation is the adapter's job. Every adapter needs it. The specifics depend on the infrastructure—JSON needs dicts, databases need rows, APIs need HTTP.
 
 #### Implementation 3: SQLite Repository
+
+JSON files work for small data sets, but they get slow when you have thousands of records. Every query loads the entire file. Plus, no transactions, no concurrent writes, no SQL queries.
+
+Time for a real database. SQLite is perfect here—it's included in Python, requires no server setup, and gives us proper database features. Production-ready for small to medium applications.
 
 Now let's use a real database with Python's built-in `sqlite3` module:
 

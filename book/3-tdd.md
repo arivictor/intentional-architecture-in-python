@@ -40,7 +40,9 @@ We'll build the simplest possible feature: creating a member.
 
 From a user's perspective: "I want to register a new gym member with a name and email address."
 
-We start with a test. Not with the implementation. The test describes what we want:
+We start with a test. Not with the implementation. The test describes what we want.
+
+**Note:** Python's built-in `unittest` module provides everything we need for testing. We'll use it throughout this book.
 
 ```python
 # tests/test_member.py
@@ -83,20 +85,26 @@ Start with a test:
 
 ```python
 def test_member_requires_valid_email():
-    with pytest.raises(ValueError, match="Invalid email"):
+    try:
         Member(
             member_id="M001",
             name="Alice Johnson",
             email="not-an-email"
         )
+        assert False, "Expected ValueError to be raised"
+    except ValueError as e:
+        assert "Invalid email" in str(e)
 
 def test_member_requires_non_empty_name():
-    with pytest.raises(ValueError, match="Name cannot be empty"):
+    try:
         Member(
             member_id="M001",
             name="",
             email="alice@example.com"
         )
+        assert False, "Expected ValueError to be raised"
+    except ValueError as e:
+        assert "Name cannot be empty" in str(e)
 ```
 
 Run the tests. They fail. **Red.**
@@ -374,19 +382,21 @@ The **testing pyramid** is a guide:
 /__________________\
 ```
 
-**Unit tests** are at the base. They test individual functions or classes in isolation. They're fast—milliseconds. They're focused—one behavior per test. They're many—hundreds or thousands.
+**Unit tests** are at the base. They test individual functions or classes in isolation—no databases, no network, no external dependencies. They're fast—milliseconds. They're focused—one behavior per test. They're many—hundreds or thousands. Unit tests verify that your business logic works correctly.
 
 ```python
 def test_member_deduct_credit():
+    """Unit test: tests a single method in isolation"""
     member = Member("M001", "Alice", "alice@example.com", credits=10)
     member.deduct_credit()
     assert member.credits == 9
 ```
 
-**Integration tests** are in the middle. They test how components work together. They might touch a database or call an external service. They're slower—seconds. They're broader—testing workflows across multiple classes.
+**Integration tests** are in the middle. They test how components work together—your code interacting with databases, file systems, or other services. They're slower—seconds. They're broader—testing workflows across multiple classes. Integration tests verify that your code integrates correctly with external systems.
 
 ```python
 def test_booking_persists_to_database():
+    """Integration test: tests interaction with database"""
     repo = SqliteMemberRepository(test_db)
     member = Member("M001", "Alice", "alice@example.com", credits=10)
     repo.save(member)
@@ -395,10 +405,11 @@ def test_booking_persists_to_database():
     assert loaded.credits == 10
 ```
 
-**End-to-end tests** are at the top. They test the entire system from the user's perspective. HTTP requests, database, email sending—everything. They're slowest—minutes. They're fewest—a handful of critical paths.
+**End-to-end tests** (E2E) are at the top. They test the entire system from the user's perspective—HTTP requests, database, email sending, everything running together as it would in production. They're slowest—minutes. They're fewest—a handful of critical paths. E2E tests verify that the complete user workflow works as expected.
 
 ```python
 def test_complete_booking_flow():
+    """E2E test: tests complete user workflow through HTTP API"""
     response = client.post('/bookings', json={
         'member_id': 'M001',
         'class_id': 'C001'
@@ -607,6 +618,24 @@ TDD is powerful. But it's not always the right tool.
 
 TDD is a tool. Use it when it helps. Skip it when it doesn't.
 
+## From Tests to Structure
+
+You've built a solid testing foundation. Your gym booking system has tests for member creation, class bookings, credit deduction, and waitlist management. The red-green-refactor rhythm guides your development. Each test passes. The code works.
+
+But as the system grows, a new challenge emerges. Your tests are getting harder to write.
+
+To test booking logic, you need a database. To test notifications, you need an email server. To test API endpoints, you need the full HTTP stack running. Each test requires more setup. More dependencies. More infrastructure that has nothing to do with the business rules you're trying to verify.
+
+The tests are telling you something. They're saying: "This code is too tangled."
+
+TDD revealed the need for better structure. The domain logic—member rules, class capacity, pricing strategies—is mixed with infrastructure concerns like database persistence and email sending. Your tests want to verify business rules, but they're forced to set up technical infrastructure.
+
+**This is the signal.** When tests become difficult to write, when you can't test business logic in isolation, when infrastructure leaks into your domain—that's when you need architectural boundaries.
+
+The next chapter introduces those boundaries. We'll separate business logic from technical details. We'll organise code into layers that let you test domain rules without databases, write use cases without HTTP, and swap infrastructure without touching business logic.
+
+TDD got you here. It showed you what works and what doesn't. It built your confidence to refactor. Now it's telling you that the code needs structure—not because of architectural dogma, but because the tests are asking for it.
+
 ## Summary
 
 TDD is the foundation of intentional architecture. It gives you:
@@ -619,5 +648,7 @@ TDD is the foundation of intentional architecture. It gives you:
 The chapters that follow—layers, domain modeling, ports and adapters—build on this foundation. Without TDD, those patterns feel academic. With TDD, they emerge naturally from the tests.
 
 Start simple. Write a failing test. Make it pass. Clean it up. Repeat.
+
+We've built domain objects through TDD. `Member`, `FitnessClass`, `Booking`—each tested and focused. But as we add persistence, APIs, and infrastructure, we'll discover these objects need organization. That's where layers come in.
 
 That's how architecture happens.
