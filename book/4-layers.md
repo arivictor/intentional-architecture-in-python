@@ -396,6 +396,7 @@ class Member:
 
 # Domain: domain/member_repository.py (interface/protocol)
 from abc import ABC, abstractmethod
+from typing import Optional
 from domain.member import Member
 
 class MemberRepository(ABC):
@@ -408,11 +409,12 @@ class MemberRepository(ABC):
         pass
     
     @abstractmethod
-    def find_by_id(self, member_id: str) -> Member:
+    def find_by_id(self, member_id: str) -> Optional[Member]:
         pass
 
 # Infrastructure: infrastructure/sqlite_member_repository.py
 import sqlite3
+from typing import Optional
 from domain.member import Member
 from domain.member_repository import MemberRepository
 
@@ -431,7 +433,7 @@ class SqliteMemberRepository(MemberRepository):
         conn.commit()
         conn.close()
     
-    def find_by_id(self, member_id: str) -> Member:
+    def find_by_id(self, member_id: str) -> Optional[Member]:
         conn = sqlite3.connect('gym.db')
         cursor = conn.cursor()
         cursor.execute("SELECT id, name, email FROM members WHERE id = ?", (member_id,))
@@ -439,6 +441,8 @@ class SqliteMemberRepository(MemberRepository):
         conn.close()
         
         if row:
+            # Note: In a real implementation, you'd also load the pricing strategy
+            # from the database. We'll cover this in Chapter 7.
             return Member(member_id=row[0], name=row[1], email=row[2], pricing_strategy=None)
         return None
 ```
