@@ -8,7 +8,9 @@ New requirements arrive that expose this shallowness:
 
 **Complex booking rules:** Members can't cancel bookings within 2 hours of class time. Premium members get priority when classes are full. Members can only book one class per time slot.
 
-**Credit system complexity:** Member credits expire after 30 days. Premium members get 10 credits per month, basic members get 5. Credits are deducted on booking and refunded on cancellation (with rules).
+**Credit system complexity:** Member credits expire after 30 days. Premium members get 20 credits per month, basic members get 10. Credits are deducted on booking and refunded on cancellation (with rules).
+
+**Evolution Note:** You may recall earlier simplified examples mentioning 10 credits for premium and 5 for basic. We're refining our credit allocation to more realistic values (20/10) as our domain model matures. This kind of domain model refinement is natural as your understanding deepens—it's not changing requirements, it's better capturing them.
 
 **Time slot conflicts:** Classes run at specific days and times. A member can't book two classes that overlap. The system needs to detect conflicts.
 
