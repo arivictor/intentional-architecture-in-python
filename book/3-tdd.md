@@ -85,22 +85,26 @@ Start with a test:
 
 ```python
 def test_member_requires_valid_email():
-    with self.assertRaises(ValueError) as context:
+    try:
         Member(
             member_id="M001",
             name="Alice Johnson",
             email="not-an-email"
         )
-    assert "Invalid email" in str(context.exception)
+        assert False, "Expected ValueError to be raised"
+    except ValueError as e:
+        assert "Invalid email" in str(e)
 
 def test_member_requires_non_empty_name():
-    with self.assertRaises(ValueError) as context:
+    try:
         Member(
             member_id="M001",
             name="",
             email="alice@example.com"
         )
-    assert "Name cannot be empty" in str(context.exception)
+        assert False, "Expected ValueError to be raised"
+    except ValueError as e:
+        assert "Name cannot be empty" in str(e)
 ```
 
 Run the tests. They fail. **Red.**
