@@ -676,6 +676,8 @@ Why is `Booking` an aggregate? What makes it different from other entities?
 
 `Booking` represents a complete business transaction—a member's commitment to show up. It has its own lifecycle, independent of both `Member` and `FitnessClass`:
 
+**Note on Aggregate Design:** Deciding where to draw aggregate boundaries is one of the most challenging aspects of domain modeling. We've kept our examples straightforward, but real systems face harder questions: Should a waitlist be part of the FitnessClass aggregate or separate? When do you split versus combine? See **Appendix A: Aggregate Design & Boundary Decisions** for a detailed exploration of these design decisions.
+
 ```
 ┌─────────────────────────────────────────────┐
 │ Booking Aggregate                           │
@@ -869,6 +871,8 @@ There's a distinction worth making: business rules are truths about the domain. 
 "A class cannot exceed its capacity" is a business rule. It's invariant. It's true regardless of how you access the system—through an API, a CLI, or a batch job. This belongs in the domain.
 
 "When a booking is confirmed, send an email notification" is an application policy. It's about how you respond to domain events, not about domain truth. This belongs in the application layer.
+
+**Note on Domain Events:** As your domain grows more complex, you may need to communicate changes between aggregates or trigger side effects when domain state changes. Domain events provide a powerful pattern for this—treating state changes as first-class events that other parts of the system can react to. We touch on this briefly here, but see **Appendix B: Domain Events** for a complete treatment of event-driven domain architecture.
 
 Keeping these separate matters. The domain should be pure business logic. If you removed all infrastructure—no database, no email server, no HTTP—the domain should still make sense. It should still enforce its rules. It should still represent the business accurately.
 
@@ -1066,6 +1070,8 @@ class EmailAddress:
 
 This is validation. The email format is structurally invalid. It's not a business rule violation—it's a data quality issue. `ValueError` is appropriate here because this is about the validity of input data.
 
+**Note on Validation Strategies:** Validation appears at every layer—domain, application, and interface. Each layer validates different concerns: domain validates business invariants, application validates workflows, interface validates user input. For a comprehensive guide to organizing validation across your architecture, see **Appendix E: Validation Strategies Across Layers**.
+
 **Use domain exceptions for business rule violations:**
 
 ```python
@@ -1210,7 +1216,11 @@ yoga_class = FitnessClass("C001", "Yoga", capacity, time_slot)
 
 # Create a booking
 booking = Booking("B001", member.id, yoga_class.id)
+```
 
+**Note on Object Creation:** As your domain objects become more complex—requiring validation, multiple steps, or different construction strategies—you may find yourself with complicated creation logic scattered throughout your code. The Factory pattern provides clean ways to encapsulate complex object creation. See **Appendix C: Factory Pattern for Complex Creation** for patterns like factory methods, abstract factories, and builders that keep construction logic organized and testable.
+
+```python
 # Business logic flows through domain objects
 try:
     # Check if member has credits
