@@ -132,10 +132,10 @@ We'll separate our code into four layers:
 **The dependency rule:** Dependencies flow inward toward the domain.
 - Domain depends on nothing (no imports from other layers)
 - Application depends on domain only
-- Infrastructure implements abstractions defined by domain, never imports concrete entities
+- Infrastructure implements abstractions defined by domain (imports interfaces, not business logic)
 - Interface depends on application and infrastructure (to execute use cases and wire up adapters)
 
-**Important nuance about infrastructure:** Infrastructure implements abstractions defined by the domain. The domain defines what it needs (like a repository interface), and infrastructure provides concrete implementations. Infrastructure never imports concrete domain entities or business logic. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
+**Important nuance about infrastructure:** Infrastructure implements abstractions defined by the domain. The domain defines what it needs (like a repository interface), and infrastructure provides concrete implementations. Infrastructure imports domain entities for persistence operations, but never contains business logic or violates the dependency inversion principle. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
 
 > **Forward Reference:** We introduce the repository concept here, but the full implementation using ports and adapters comes in Chapter 7. For now, understand that repositories mediate between domain and data storage.
 
@@ -412,6 +412,8 @@ class MemberRepository(ABC):
 
 # Infrastructure: infrastructure/sqlite_member_repository.py
 import sqlite3
+from domain.member import Member
+from domain.member_repository import MemberRepository
 
 class SqliteMemberRepository(MemberRepository):
     """
