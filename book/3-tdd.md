@@ -40,7 +40,9 @@ We'll build the simplest possible feature: creating a member.
 
 From a user's perspective: "I want to register a new gym member with a name and email address."
 
-We start with a test. Not with the implementation. The test describes what we want:
+We start with a test. Not with the implementation. The test describes what we want.
+
+**Note:** Python's built-in `unittest` module provides everything we need for testing. We'll use it throughout this book.
 
 ```python
 # tests/test_member.py
@@ -83,20 +85,26 @@ Start with a test:
 
 ```python
 def test_member_requires_valid_email():
-    with pytest.raises(ValueError, match="Invalid email"):
+    try:
         Member(
             member_id="M001",
             name="Alice Johnson",
             email="not-an-email"
         )
+        assert False, "Expected ValueError to be raised"
+    except ValueError as e:
+        assert "Invalid email" in str(e)
 
 def test_member_requires_non_empty_name():
-    with pytest.raises(ValueError, match="Name cannot be empty"):
+    try:
         Member(
             member_id="M001",
             name="",
             email="alice@example.com"
         )
+        assert False, "Expected ValueError to be raised"
+    except ValueError as e:
+        assert "Name cannot be empty" in str(e)
 ```
 
 Run the tests. They fail. **Red.**
@@ -374,19 +382,21 @@ The **testing pyramid** is a guide:
 /__________________\
 ```
 
-**Unit tests** are at the base. They test individual functions or classes in isolation. They're fast—milliseconds. They're focused—one behavior per test. They're many—hundreds or thousands.
+**Unit tests** are at the base. They test individual functions or classes in isolation—no databases, no network, no external dependencies. They're fast—milliseconds. They're focused—one behavior per test. They're many—hundreds or thousands. Unit tests verify that your business logic works correctly.
 
 ```python
 def test_member_deduct_credit():
+    """Unit test: tests a single method in isolation"""
     member = Member("M001", "Alice", "alice@example.com", credits=10)
     member.deduct_credit()
     assert member.credits == 9
 ```
 
-**Integration tests** are in the middle. They test how components work together. They might touch a database or call an external service. They're slower—seconds. They're broader—testing workflows across multiple classes.
+**Integration tests** are in the middle. They test how components work together—your code interacting with databases, file systems, or other services. They're slower—seconds. They're broader—testing workflows across multiple classes. Integration tests verify that your code integrates correctly with external systems.
 
 ```python
 def test_booking_persists_to_database():
+    """Integration test: tests interaction with database"""
     repo = SqliteMemberRepository(test_db)
     member = Member("M001", "Alice", "alice@example.com", credits=10)
     repo.save(member)
@@ -395,10 +405,11 @@ def test_booking_persists_to_database():
     assert loaded.credits == 10
 ```
 
-**End-to-end tests** are at the top. They test the entire system from the user's perspective. HTTP requests, database, email sending—everything. They're slowest—minutes. They're fewest—a handful of critical paths.
+**End-to-end tests** (E2E) are at the top. They test the entire system from the user's perspective—HTTP requests, database, email sending, everything running together as it would in production. They're slowest—minutes. They're fewest—a handful of critical paths. E2E tests verify that the complete user workflow works as expected.
 
 ```python
 def test_complete_booking_flow():
+    """E2E test: tests complete user workflow through HTTP API"""
     response = client.post('/bookings', json={
         'member_id': 'M001',
         'class_id': 'C001'
