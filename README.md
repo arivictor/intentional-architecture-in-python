@@ -72,7 +72,7 @@ By the end, you won't just know the patterns, you'll understand when to apply th
 
 This book is licensed under [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/).
 
-**Copyright © 2025 Ari Laverty**
+**Copyright © 2025 Ari Victor**
 
 You are free to share this work for non-commercial purposes with attribution. You may not create derivative works or use this material commercially without permission.
 
