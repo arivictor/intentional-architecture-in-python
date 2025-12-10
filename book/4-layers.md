@@ -135,7 +135,7 @@ We'll separate our code into four layers:
 - Infrastructure implements abstractions defined by domain (imports interfaces, not business logic)
 - Interface depends on application and infrastructure (to execute use cases and wire up adapters)
 
-**Important nuance about infrastructure:** Infrastructure implements abstractions defined by the domain. The domain defines what it needs (like a repository interface), and infrastructure provides concrete implementations. Infrastructure imports domain entities for persistence operations, but never contains business logic or violates the dependency inversion principle. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
+**Important nuance about infrastructure:** Infrastructure implements abstractions defined by the domain. The domain defines what it needs (like a repository interface), and infrastructure provides concrete implementations. Infrastructure imports domain entities for persistence operations, but never contains business logic. This is Dependency Inversion from Chapter 2. We'll see this pattern fully in Chapter 7 when we introduce ports and adapters.
 
 > **Forward Reference:** We introduce the repository concept here, but the full implementation using ports and adapters comes in Chapter 7. For now, understand that repositories mediate between domain and data storage.
 
@@ -423,11 +423,24 @@ class SqliteMemberRepository(MemberRepository):
     """
     def save(self, member: Member):
         conn = sqlite3.connect('gym.db')
-        # Database code lives here
+        cursor = conn.cursor()
+        cursor.execute(
+            "INSERT OR REPLACE INTO members (id, name, email) VALUES (?, ?, ?)",
+            (member.id, member.name, member.email)
+        )
+        conn.commit()
+        conn.close()
     
     def find_by_id(self, member_id: str) -> Member:
-        # Database query here
-        pass
+        conn = sqlite3.connect('gym.db')
+        cursor = conn.cursor()
+        cursor.execute("SELECT id, name, email FROM members WHERE id = ?", (member_id,))
+        row = cursor.fetchone()
+        conn.close()
+        
+        if row:
+            return Member(member_id=row[0], name=row[1], email=row[2], pricing_strategy=None)
+        return None
 ```
 
 **Benefit:** Test `Member` with nothing but Python. Swap SQLite for PostgreSQL by changing one file.
