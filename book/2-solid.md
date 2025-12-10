@@ -169,9 +169,12 @@ class BookingService:
 Now `Member` represents member data. One responsibility. If you need to add a phone number or track membership duration, you change `Member`. Nothing else.
 
 **Note:** The Member class here is what we call an **anemic domain model**—
-it holds data but delegates all logic to services. This is fine for 
-demonstrating SOLID, but Chapter 5 will show how to enrich domain objects 
-with behavior. For now, focus on the separation of responsibilities.
+a class that holds data but contains little or no business logic, delegating 
+all behavior to services. While this approach can feel wrong (shouldn't objects 
+have behavior?), it's a valid starting point and works well for demonstrating 
+SOLID principles. In Chapter 5, we'll explore when and how to enrich domain 
+objects with behavior, moving beyond simple data containers. For now, focus 
+on the separation of responsibilities.
 
 Pricing lives in `PricingService`. If pricing rules change, that's the only place you look. Booking coordination lives in `BookingService`. Notifications live elsewhere.
 
@@ -375,6 +378,8 @@ def process_booking(membership: Membership, fitness_class):
 ```
 
 It works the same whether you pass `RegularMembership` or `GuestPass`. No special cases. No surprises. That's Liskov Substitution.
+
+**Why this matters practically:** Without this principle, every function that accepts a parent type needs defensive checks for every possible subtype. Your codebase fills with `if isinstance(obj, GuestPass)` conditions. When you add a new membership type, you hunt through the entire codebase updating those checks. Liskov Substitution prevents this coupling—polymorphism becomes a tool for extension, not a source of bugs.
 
 Yes, we added a `can_book()` method. Yes, that's more code. But look at what we gained: you can now add ten different membership types without changing any code that processes bookings. Each type encapsulates its own booking rules. The complexity is contained, not scattered.
 
