@@ -270,6 +270,8 @@ More methods because bookings are queried in more ways. By member. By class. By 
 
 But still: no SQL. No database code. Just contracts.
 
+**Note on Complex Queries:** As your repository ports grow, you may need more sophisticated querying capabilities—filtering by multiple criteria, sorting, pagination, or complex joins. For repositories with these needs, patterns like Specification or Query Objects can help keep your port interfaces clean while supporting rich queries. See **Appendix D: Repository Query Patterns** for detailed exploration of these advanced patterns.
+
 One more repository—waitlist entries:
 
 ```python

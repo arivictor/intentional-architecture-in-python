@@ -187,6 +187,8 @@ Look at what this use case does and doesn't do.
 
 The business rules stay in the domain. The orchestration happens here.
 
+**Note on Transactions:** Notice that we save the member, class, and booking separately. If one save fails, the others might still succeed, leaving the system in an inconsistent state. In production systems, you want these saves to happen atomically—all succeed or all fail. The Unit of Work pattern provides a clean way to manage transaction boundaries across multiple repository operations. See **Appendix F: Unit of Work Pattern** for implementation details.
+
 ### Using the BookClassUseCase: Error Handling in Practice
 
 The use case raises domain exceptions when business rules are violated. Here's how you'd use it in practice, handling the different scenarios that can occur:
