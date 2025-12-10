@@ -396,6 +396,7 @@ class Member:
 
 # Domain: domain/member_repository.py (interface/protocol)
 from abc import ABC, abstractmethod
+from domain.member import Member
 
 class MemberRepository(ABC):
     """
