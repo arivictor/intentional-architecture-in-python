@@ -233,7 +233,32 @@ A responsibility is a stakeholder or concern that might request a change. If two
 
 Our `create_member()` function mixes validation with data creation. Let's separate these concerns.
 
-First, let's create a `Member` class that validates itself:
+**Why use a class here?**
+
+We could just split `create_member()` into smaller functions like `validate_email()` and `validate_membership_type()`. But a class gives us something more valuable: **data and behavior together**. Its a 1-to-1 mapping of a real-world concept (a gym member) to code.
+
+Whenever we have a member, we need:
+
+- The member's data (name, email, credits)
+- Validation rules for that data
+- The guarantee that invalid members can't exist
+
+A class packages all of this into one cohesive unit. The `Member` class becomes the single source of truth for:
+
+1. What fields a member has
+2. What values are valid
+3. How a member is initialized
+
+This means:
+
+- **No orphaned data**: You can't accidentally create a member dict with `creditz` instead of `credits`
+- **No validation bypass**: You can't create an invalid member because validation happens in `__init__`
+- **Clear contract**: Any code that has a `Member` object knows exactly what it contains
+- **Better IDE support**: Your editor can autocomplete `.name`, `.email`, etc.
+
+We're not just tidying upm we're creating a defensive boundary around member data.
+
+Let's create a `Member` class that validates itself:
 
 ```python
 class Member:
