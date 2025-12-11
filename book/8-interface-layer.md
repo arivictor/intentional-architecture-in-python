@@ -1,18 +1,80 @@
 # Chapter 8: Interface Layer - Building an API
 
-We have a complete system. Domain entities like `Member`, `FitnessClass`, and `Booking` enforce business rules. Use cases like `BookClassUseCase` and `CancelBookingUseCase` orchestrate workflows. Infrastructure adapters handle persistence and notifications. Ports define clean boundaries between layers.
+We have a complete hexagonal architecture from Chapter 7. Domain entities enforce business rules. Use cases orchestrate workflows. Ports define abstractions. Adapters implement infrastructure. Dependencies point inward. The core is clean and testable.
 
-The system works. Run the use cases directly, and they execute flawlessly.
+But there's one piece missing: **how do users actually access this system?**
 
-But there's a problem: **nobody can use it**.
+## Where We Left Off
 
-There's no way for a user to interact with the system. No REST API. No command-line interface. No web interface. The application is complete internally but invisible externally.
+In Chapter 7, we built complete hexagonal architecture:
 
-**We need an interface layer.**
+**The Core:**
+```python
+# application/use_cases/book_class_use_case.py
+class BookClassUseCase:
+    def __init__(self, member_repository: MemberRepository,  # Port!
+                 class_repository: FitnessClassRepository,    # Port!
+                 booking_repository: BookingRepository,        # Port!
+                 notification_service: NotificationService):   # Port!
+        self.member_repository = member_repository
+        # ...
+    
+    def execute(self, command: BookClassCommand) -> BookingResult:
+        # Orchestration using ports
+        # ...
+```
 
-The interface layer is where the outside world connects to your application. It translates external requests (HTTP, CLI commands, GraphQL queries) into domain operations, then translates domain results back into external formats (JSON, terminal output, HTML).
+**The Adapters:**
+```python
+# infrastructure/adapters/sqlite_member_repository.py
+class SqliteMemberRepository(MemberRepository):  # Implements port
+    def get_by_id(self, member_id: str) -> Member:
+        # SQLite implementation
+        # ...
+```
 
-This chapter builds that missing piece: a complete HTTP API for our gym booking system.
+**The Container:**
+```python
+# infrastructure/container.py
+def create_production_container() -> ApplicationContainer:
+    # Wire up adapters
+    member_repo = SqliteMemberRepository(db)
+    # ...
+    book_class_use_case = BookClassUseCase(member_repo, ...)
+    return container
+```
+
+**What works:**
+- Complete hexagonal architecture
+- Testable with InMemory adapters
+- Swappable infrastructure
+- Clean dependency flow
+
+**The problem:**
+We can run use cases directly in tests:
+```python
+def test_booking():
+    use_case = BookClassUseCase(...)
+    result = use_case.execute(command)
+    # Works great in tests!
+```
+
+But there's **no way for real users to access the system.** No REST API. No command-line interface. No web interface. The application is functionally complete but externally invisible.
+
+We need an **interface layer**.
+
+## The New Challenge
+
+The gym manager says: "Our mobile app needs to access the booking system via REST API. Also, gym staff still want the command-line interface for administrative tasks."
+
+Requirements:
+1. **REST API** for mobile app integration
+2. **CLI** for staff administrative access
+3. **Both use the same use cases** (no duplicate logic)
+4. **HTTP concerns stay out of the core** (status codes, JSON serialization belong in interface)
+5. **Easy to add more interfaces later** (GraphQL, WebSockets, etc.)
+
+This is what hexagonal architecture enables: multiple interfaces, one core.
 
 ## Where the Interface Layer Fits
 
@@ -1471,6 +1533,94 @@ if __name__ == '__main__':
 ```
 
 Two interfaces. One application. This is the power of separation.
+
+## What We Have Now
+
+Let's take stock. We've completed the interface layer:
+
+**Our system now has:**
+1. **Multiple interfaces using same core:**
+   - REST API (HTTP endpoints for mobile app)
+   - CLI (command-line for staff)
+   - Both call the same use cases
+
+2. **Clean separation:**
+   - Domain: Business rules (no HTTP knowledge)
+   - Application: Use case orchestration (no JSON knowledge)
+   - Infrastructure: Database/email adapters
+   - Interface: HTTP/CLI translation layer
+
+3. **Framework-independent architecture:**
+   - Understand what frameworks do (routing, validation, serialization)
+   - Can use vanilla Python HTTP or migrate to FastAPI
+   - Core unchanged regardless of framework choice
+
+4. **Complete stack:**
+```
+┌──────────────────────────────────────────┐
+│      Interface Layer                     │
+│   ┌────────────┐    ┌────────────┐      │
+│   │ REST API   │    │    CLI     │      │
+│   └─────┬──────┘    └─────┬──────┘      │
+├─────────┼─────────────────┼──────────────┤
+│         ▼                 ▼              │
+│      Application Layer                   │
+│   (Use Cases with Ports)                 │
+├──────────────────────────────────────────┤
+│      Domain Layer                        │
+│   (Entities + Value Objects)             │
+├──────────────────────────────────────────┤
+│      Infrastructure Layer                │
+│   (Adapters: SQLite, SMTP, InMemory)    │
+└──────────────────────────────────────────┘
+```
+
+**What we gained:**
+- Users can actually access the system!
+- Mobile app uses REST API
+- Staff use CLI for admin tasks
+- Same business logic powers both
+- Easy to add GraphQL, WebSockets, etc.
+- Framework changes don't affect core
+
+**The complete journey:**
+1. Ch 1: Simple procedural CLI
+2. Ch 2: SOLID classes
+3. Ch 3: TDD with tests
+4. Ch 4: Layered architecture
+5. Ch 5: Rich domain model
+6. Ch 6: Formalized use cases
+7. Ch 7: Hexagonal architecture (ports & adapters)
+8. Ch 8: Multiple interfaces (REST API + CLI)
+
+We now have a **complete, well-architected system** from the ground up!
+
+## Transition to Chapter 9
+
+We've learned all the pieces individually:
+- SOLID principles (Chapter 2)
+- Test-Driven Development (Chapter 3)
+- Layered architecture (Chapter 4)
+- Rich domain modeling (Chapter 5)
+- Use cases and orchestration (Chapter 6)
+- Ports and adapters (Chapter 7)
+- Interface layer (Chapter 8)
+
+But how do they all work together? How do you apply everything when building a real feature from scratch?
+
+In Chapter 9, we'll walk through **building a complete feature** using all these patterns:
+
+**New requirement:** "Premium members should get priority on waitlists. When a class opens up, promote premium members before basic members."
+
+We'll:
+- Use TDD to drive the feature
+- Model it in the domain (value objects, business rules)
+- Create the use case (orchestration)
+- Update repositories (ports & adapters)
+- Expose via both API and CLI (interface layer)
+- Show how everything fits together
+
+This is **Putting It All Together**—the complete workflow from requirement to deployment.
 
 ## Key Takeaways
 
