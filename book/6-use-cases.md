@@ -1,16 +1,116 @@
 # Chapter 6: Use Cases & Application Layer
 
-We have a rich domain from Chapter 5. `Member`, `FitnessClass`, and `Booking` entities enforce business rules. Value objects like `TimeSlot` and `EmailAddress` make invalid states impossible. The domain layer is solid.
+We have a rich domain from Chapter 5. `Member`, `FitnessClass`, and `Booking` entities enforce business rules. Value objects like `TimeSlot`, `EmailAddress`, and `Credits` make invalid states impossible. The domain layer is solid—it speaks the business language and protects its own invariants.
 
 Now we need to build the application layer that orchestrates it.
 
-A use case is a single place that defines one complete workflow. "Book a class." "Cancel a booking." "Process waitlist." Each use case coordinates domain objects to accomplish a specific goal.
+## Where We Left Off
 
-This chapter builds those use cases.
+In Chapter 5, we built a rich domain model. Here's what we have:
+
+**Domain entities:**
+```python
+# domain/entities/member.py
+class Member:
+    def __init__(self, member_id: MemberId, name: str, email: EmailAddress, 
+                 membership_type: MembershipType):
+        self._id = member_id
+        self._name = name
+        self._email = email
+        self._membership_type = membership_type
+        self._credits = Credits(amount=20 if membership_type == MembershipType.PREMIUM else 10)
+    
+    def deduct_credit(self):
+        if not self._credits.has_available():
+            raise InsufficientCreditsException()
+        self._credits = self._credits.deduct(1)
+
+# domain/entities/fitness_class.py
+class FitnessClass:
+    def __init__(self, class_id, name: str, capacity: ClassCapacity, 
+                 time_slot: TimeSlot):
+        self._id = class_id
+        self._name = name
+        self._capacity = capacity
+        self._time_slot = time_slot
+        self._bookings = []
+    
+    def add_booking(self, member_id: str):
+        if self.is_full():
+            raise ClassFullException(f"Class {self._name} is at capacity")
+        if member_id in self._bookings:
+            raise ValueError("Member already booked")
+        self._bookings.append(member_id)
+```
+
+**Application layer (current state):**
+```python
+# application/booking_service.py
+class BookingService:
+    def book_class(self, member_id: str, class_id: str):
+        # This orchestration code is getting messy...
+        member = self.member_repo.get(member_id)
+        fitness_class = self.class_repo.get(class_id)
+        
+        # Business logic here? Or in domain?
+        if fitness_class.is_full():
+            raise ClassFullException()
+        
+        if not member.can_book():
+            raise InsufficientCreditsException()
+        
+        # Create booking
+        booking = Booking(generate_id(), member_id, class_id)
+        
+        # Update state
+        member.deduct_credit()
+        fitness_class.add_booking(member_id)
+        
+        # Save everything - but in what order?
+        self.booking_repo.save(booking)
+        self.member_repo.save(member)
+        self.class_repo.save(fitness_class)
+        
+        # Send notification - what if this fails?
+        self.notification_service.send_confirmation(member, fitness_class)
+        
+        # What do we return?
+        return booking
+```
+
+**What works:**
+- Rich domain with business rules in domain objects
+- Domain layer is testable and expressive
+- Value objects prevent invalid states
+
+**What's still a problem:**
+- Orchestration code is informal and inconsistent
+- Transaction boundaries unclear (what happens together?)
+- Error handling scattered
+- No standard input/output format
+- Each developer implements use cases differently
+
+## The New Challenge
+
+New requirements expose these problems:
+
+**Requirement 1:** "When booking fails, we need to know WHY. Is it full? Insufficient credits? Scheduling conflict?"
+
+Our current approach just raises exceptions. The interface layer has to catch and interpret them.
+
+**Requirement 2:** "When booking a class, send a confirmation email. If the email fails, still create the booking."
+
+This is an application policy, not a business rule. Where does it go? What if later we want: "If email fails, rollback the booking"?
+
+**Requirement 3:** "Log every booking attempt (success or failure) for analytics."
+
+This crosses all layers. Who coordinates it?
+
+Our informal `BookingService` can handle some of this, but as use cases multiply, we need structure.
 
 ## What Is a Use Case?
 
-A use case is a single action that accomplishes a specific goal from a user's perspective.
+A use case is a single workflow that accomplishes a specific goal from a user's perspective.
 
 Not "save a booking to the database." That's too technical. Not "update member credits and check class capacity and send email and log the event." That's too granular.
 
@@ -1097,6 +1197,114 @@ This is just a pass-through. It adds a file with no value. If you're only loadin
 We created `BookClassUseCase` because the booking workflow was duplicated across API, admin panel, and waitlist processing. That duplication was the signal. If we only had one way to book classes, we might not need the use case yet.
 
 Architecture responds to reality. Start simple. Extract when it hurts.
+
+## What We Have Now
+
+Let's take stock. We've formalized the application layer with proper use cases:
+
+**Our application layer now has:**
+1. **Structured use cases with Command/Result pattern:**
+   - `BookClassCommand` → `BookClassUseCase` → `BookingResult`
+   - `CancelBookingCommand` → `CancelBookingUseCase` → `CancellationResult`
+   - Clear input/output contracts
+
+2. **Separation of concerns:**
+   - Domain: Business rules (`Member.deduct_credit()`, `FitnessClass.add_booking()`)
+   - Application: Orchestration (load entities, call domain methods, save, notify)
+   - No business logic in use cases
+
+3. **Transaction boundaries:**
+   - Each use case is one atomic operation
+   - Clear success/failure modes
+   - Error handling centralized
+
+4. **Testable workflows:**
+   - Can test orchestration logic separately from domain logic
+   - Commands are easy to construct in tests
+   - Results are easy to assert on
+
+**Updated structure:**
+```
+gym_booking/
+  ├── domain/
+  │   ├── entities/...
+  │   ├── value_objects/...
+  │   └── exceptions.py
+  ├── application/
+  │   ├── commands/
+  │   │   ├── book_class_command.py
+  │   │   └── cancel_booking_command.py
+  │   ├── results/
+  │   │   ├── booking_result.py
+  │   │   └── cancellation_result.py
+  │   └── use_cases/
+  │       ├── book_class_use_case.py
+  │       ├── cancel_booking_use_case.py
+  │       └── process_waitlist_use_case.py
+  ├── infrastructure/...
+  └── tests/
+      ├── test_book_class_use_case.py  # New
+      └── test_cancel_booking_use_case.py  # New
+```
+
+**What we gained:**
+- Consistent structure for all workflows
+- Clear separation between orchestration and business logic
+- Testable application layer
+- Explicit transaction boundaries
+- Standardized error handling
+
+**But there's still a problem:**
+- Use cases depend on concrete implementations (`SqliteMemberRepository`)
+- Can't swap databases without changing use case code
+- Tests require real infrastructure (database, email server)
+- Violates Dependency Inversion Principle
+
+**Current issue:**
+```python
+class BookClassUseCase:
+    def __init__(self, member_repo, class_repo, booking_repo, notification_service):
+        # These are CONCRETE implementations!
+        # We depend on infrastructure details
+        # Can't test without a database
+```
+
+## Transition to Chapter 7
+
+We've structured our application layer beautifully. Use cases are clean. Commands and Results give us clear contracts. Transaction boundaries are explicit.
+
+But we have a dependency problem. Look at this constructor:
+
+```python
+class BookClassUseCase:
+    def __init__(self, member_repository, class_repository, 
+                 booking_repository, notification_service):
+        # What types are these?
+        # SqliteMemberRepository? PostgresMemberRepository?
+        # The use case shouldn't care!
+```
+
+Right now, our use cases depend on concrete infrastructure implementations. This means:
+- **Can't swap databases** without changing use case code
+- **Can't test use cases** without a real database
+- **Violates Dependency Inversion:** High-level policy depends on low-level details
+
+We need abstractions—interfaces that define **what** the application layer needs without specifying **how** it's provided. These are called **ports**.
+
+Infrastructure will implement these ports with **adapters** (SQLite adapter, Postgres adapter, InMemory adapter for tests). This inverts the dependency: infrastructure depends on application, not the other way around.
+
+This is **Hexagonal Architecture** (Ports & Adapters). The domain and application are the "core." Infrastructure is the "outside." Ports define the boundary. Adapters implement it.
+
+In Chapter 7, we'll:
+- Define repository interfaces (ports)
+- Implement multiple adapters (SQLite, Postgres, InMemory)
+- Use dependency injection to wire everything together
+- Make our use cases testable without infrastructure
+- Achieve true independence from technical details
+
+**The challenge:** "We need to support both SQLite (local development) and PostgreSQL (production). Also, tests are slow because they hit the real database. How do we make this flexible?"
+
+That's next.
 
 ## Summary
 
