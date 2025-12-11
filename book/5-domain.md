@@ -77,11 +77,13 @@ class BookingService:
 - Can add new storage without touching domain
 
 **What's still a problem:**
-- Domain classes are mostly data containers (anemic model)
+- Domain classes are somewhat anemic (Chapter 2 introduced rich models, but they need more depth)
 - Business rules scattered between domain and application layers
 - No protection against invalid states (can set `member.credits = -5`)
 - Simple types for complex concepts (credits are just an integer)
 - Validation logic duplicated across layers
+
+**Note:** In Chapter 2, we evolved from dictionaries to anemic classes to rich classes with basic behavior (`can_book()`, `deduct_credit()`). That was the foundation. In this chapter, we'll enrich them further with value objects, proper entities, and aggregates. Think of Chapter 2 as "rich models, version 1" and this chapter as "rich models, version 2" with full DDD patterns.
 
 ## The New Challenge
 
@@ -964,6 +966,8 @@ This is why our `Member` entity doesn't send emails when the email address chang
 ### From Anemic to Rich
 
 Most codebases start with anemic domain models. Classes that are little more than property bags:
+
+**Note:** We introduced the anemic vs rich distinction in Chapter 2 when refactoring from dictionaries. Here in Chapter 5, we're taking that concept further with value objects, entities, and aggregates. If you skipped Chapter 2's progression section, go back—it establishes the foundation for what we're building here.
 
 ```python
 class Booking:

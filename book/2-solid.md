@@ -1168,15 +1168,32 @@ def book_class(member_id, class_id):
 - Business logic is separate from infrastructure
 - Testable without network calls
 
-## What We Have Now
+## What We Have Now: From Anemic to Rich
 
-Let's take stock of our progress. We've refactored our procedural script using SOLID principles:
+Let's take stock of our progress. We've refactored our procedural script through three stages:
+
+**Stage 1: Dictionaries (Chapter 1 → early Chapter 2)**
+- Data in dictionaries: `{'id': 'M001', 'name': 'Alice', 'credits': 20}`
+- Functions manipulate data from outside
+- No type safety, easy to make mistakes
+
+**Stage 2: Anemic Classes (mid Chapter 2)**
+- Data in classes: `class Member:` with just `__init__`
+- Still functions manipulate data from outside
+- Type safety improved, but behavior is external
+
+**Stage 3: Rich Classes (current state)**
+- Data AND behavior together
+- `member.can_book()`, `member.deduct_credit()` - objects manage themselves
+- Business logic encapsulated in domain objects
+- Self-protecting: invalid states prevented
 
 **Our code now has:**
-1. **Classes with behavior:** `Member`, `FitnessClass`, `Booking`
-2. **Validation encapsulated:** Email validation lives in `Member.__init__()`
-3. **Pricing strategies:** Easy to add new membership types
-4. **Notification abstraction:** Ready for different notification methods
+1. **Rich domain classes:** `Member`, `FitnessClass`, `Booking` with behavior
+2. **Validation encapsulated:** Email validation, capacity checks in constructors
+3. **Business logic in objects:** `can_book()`, `deduct_credit()`, `add_booking()`
+4. **Pricing strategies:** Easy to add new membership types (Open/Closed)
+5. **Notification abstraction:** Ready for different notification methods (Dependency Inversion)
 
 **But we still have:**
 - Dictionaries for storage (`members = {}`, `classes = {}`, `bookings = {}`)
@@ -1187,24 +1204,41 @@ Let's take stock of our progress. We've refactored our procedural script using S
 
 **Current file structure:**
 ```
-gym_booking.py (single file, ~300 lines)
-  ├── Classes: Member, FitnessClass, Booking
+gym_booking.py (single file, ~400 lines)
+  ├── Rich Domain Classes:
+  │   ├── Member (with can_book(), deduct_credit(), add_credit())
+  │   ├── FitnessClass (with is_full(), add_booking(), remove_booking())
+  │   └── Booking (with cancel())
   ├── Strategies: PricingStrategy, PremiumPricing, BasicPricing, StudentPricing
   ├── Services: NotificationService, EmailNotificationService
   ├── Data: members={}, classes={}, bookings={}
   └── Functions: create_member(), book_class(), main(), etc.
 ```
 
-This is good progress, but we're not done. Our classes follow SOLID principles, but the overall structure is still procedural. The code is easier to understand and modify, but it's all tangled together in one file.
+This is significant progress. We've moved from:
+- **Procedural** (dictionaries + functions) 
+- to **Anemic OOP** (classes as data containers)
+- to **Rich OOP** (classes with behavior and protection)
+
+Our classes now follow SOLID principles. But the overall structure is still procedural. The code is easier to understand and modify, but it's all tangled together in one file.
+
+**Key insight:** We're using rich domain models, but we haven't organized them yet. The classes are good. The structure around them needs work. That's what the next chapters address.
 
 ## Transition to Chapter 3
 
-We now have well-designed classes. But how do we know they work correctly? How do we ensure that when we refactor (and we will), we don't break existing behavior?
+We now have well-designed rich domain classes. Our `Member`, `FitnessClass`, and `Booking` objects encapsulate both data and behavior. They validate themselves. They protect their invariants. They express business logic in code.
 
-We need tests.
+But how do we know they work correctly? How do we ensure that:
+- `member.can_book()` actually checks credits properly?
+- `fitness_class.add_booking()` correctly enforces capacity limits?
+- `member.deduct_credit()` prevents going negative?
 
-In Chapter 3, we'll learn Test-Driven Development. We'll write tests for our `Member`, `FitnessClass`, and `Booking` classes. We'll discover that having followed SOLID principles makes our code much easier to test. We'll test-drive a new feature (premium waitlist) from scratch. And we'll build the safety net that lets us refactor with confidence.
+How do we ensure that when we refactor (and we will), we don't break existing behavior?
 
-**The challenge:** "We need to be confident our business rules work before deploying to production. How do we test this code without running the entire CLI?"
+We need tests. Automated, repeatable, fast tests.
+
+In Chapter 3, we'll learn Test-Driven Development. We'll write tests for our rich domain models—`Member`, `FitnessClass`, and `Booking`. We'll discover that having followed SOLID principles and built rich models makes our code much easier to test. We'll test-drive a new feature (premium waitlist) from scratch using TDD's Red-Green-Refactor cycle. And we'll build the safety net that lets us refactor with confidence.
+
+**The challenge:** "We need to be confident our business rules work before deploying to production. How do we test `member.can_book()` and `fitness_class.add_booking()` without running the entire CLI?"
 
 That's next.
