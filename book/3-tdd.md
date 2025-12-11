@@ -1,6 +1,6 @@
 # Chapter 3: Test-Driven Development
 
-SOLID principles from Chapter 2 gave us well-designed classes. `Member`, `FitnessClass`, and `Booking` now encapsulate their own validation and behavior. We have pricing strategies. We have notification abstractions. The code is more maintainable.
+SOLID principles from Chapter 2 gave us well-designed rich domain classes. `Member`, `FitnessClass`, and `Booking` now encapsulate their own validation and behavior. They're no longer anemic data containers—they have methods like `can_book()`, `deduct_credit()`, and `add_booking()` that express business logic. We have pricing strategies. We have notification abstractions. The code is more maintainable.
 
 But how do we know it works? How do we verify that our business rules are correct? How do we ensure that when we refactor—and we will—we don't break existing behavior?
 
@@ -8,7 +8,7 @@ We need tests. And more importantly, we need a way to design with tests.
 
 ## Where We Left Off
 
-In Chapter 2, we refactored our gym booking system to follow SOLID principles. Here's what we ended up with:
+In Chapter 2, we refactored our gym booking system from dictionaries to anemic classes to rich classes following SOLID principles. Here's what we ended up with:
 
 ```python
 # gym_booking.py (still one file, ~400 lines)

@@ -830,6 +830,8 @@ Let's take stock of our progress. We've refactored our gym booking system into l
 **Current state summary:**
 We have structure (layers) but our domain is still somewhat "anemic"—classes hold data with simple methods, while services do most of the work. This works, but there's room for improvement.
 
+**Note on progression:** In Chapter 2, we moved from dictionaries to anemic classes to basic rich classes with methods like `can_book()` and `deduct_credit()`. That was a huge improvement. In Chapter 5, we'll take it further with value objects, proper entities, and aggregates. Each chapter builds on the previous, progressively enriching our domain model.
+
 ## Transition to Chapter 5
 
 We have layers. Our code is organized. Tests prove it works. But look closely at our domain classes:
