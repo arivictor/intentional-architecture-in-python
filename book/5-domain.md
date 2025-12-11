@@ -1,8 +1,89 @@
 # Chapter 5: Domain Modeling (DDD)
 
-We have layers from Chapter 4. Domain logic lives in the domain layer, separated from infrastructure and interface. The structure is solid. But the domain itself is still shallow.
+We've made great progress. In Chapter 4, we organized our code into layers—domain, application, infrastructure, and interface. Each layer has a clear purpose. Dependencies flow inward. Tests don't require databases.
+
+But look closely at our domain layer. The classes are organized, but they're still shallow.
 
 **Terminology Reminder:** As introduced in the Introduction, "domain" has three meanings in this book. This chapter focuses on enriching the domain model (code) that represents the domain (business problem) in the domain layer (architecture).
+
+## Where We Left Off
+
+In Chapter 4, we created a layered architecture. Here's where we are:
+
+**Domain layer:**
+```python
+# domain/member.py
+class Member:
+    def __init__(self, member_id, name, email, membership_type, pricing_strategy):
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.pricing_strategy = pricing_strategy
+        self.credits = 20 if membership_type == 'premium' else 10
+    
+    def can_book(self):
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        if self.credits > 0:
+            self.credits -= 1
+
+# domain/fitness_class.py
+class FitnessClass:
+    def __init__(self, class_id, name, capacity, day, start_time):
+        if capacity <= 0:
+            raise ValueError("Capacity must be positive")
+        
+        self.id = class_id
+        self.name = name
+        self.capacity = capacity
+        self.day = day
+        self.start_time = start_time
+        self.bookings = []
+    
+    def is_full(self):
+        return len(self.bookings) >= self.capacity
+```
+
+**Application layer:**
+```python
+# application/booking_service.py
+class BookingService:
+    def __init__(self, member_repo, class_repo, notification_service):
+        self.member_repo = member_repo
+        self.class_repo = class_repo
+        self.notification_service = notification_service
+    
+    def book_class(self, member_id, class_id):
+        member = self.member_repo.get(member_id)
+        fitness_class = self.class_repo.get(class_id)
+        
+        if fitness_class.is_full():
+            raise ValueError("Class is full")
+        if not member.can_book():
+            raise ValueError("Insufficient credits")
+        
+        # Create booking...
+```
+
+**What works:**
+- Clear separation between layers
+- Domain doesn't depend on infrastructure
+- Tests run fast without databases
+- Can add new storage without touching domain
+
+**What's still a problem:**
+- Domain classes are mostly data containers (anemic model)
+- Business rules scattered between domain and application layers
+- No protection against invalid states (can set `member.credits = -5`)
+- Simple types for complex concepts (credits are just an integer)
+- Validation logic duplicated across layers
+
+## The New Challenge
 
 New requirements arrive that expose this shallowness:
 
@@ -1350,6 +1431,107 @@ When building your domain, use this table to decide which pattern fits your need
 5. **Is a business rule violated?** → Domain Exception
 
 **Remember:** Start simple. Don't create value objects for every field or aggregates for every relationship. Let real complexity and pain drive these decisions. The patterns serve the problem, not the other way around.
+
+## What We Have Now
+
+Let's take stock. We've transformed our gym booking system from an anemic domain model to a rich one:
+
+**Our domain now has:**
+1. **Entities with identity:**
+   - `Member` with ID, email validation, credit management
+   - `FitnessClass` with scheduling rules, capacity enforcement
+   
+2. **Value objects for complex concepts:**
+   - `EmailAddress` (validated email with behavior)
+   - `TimeSlot` (day + time with conflict detection)
+   - `ClassCapacity` (validated capacity range)
+   - `Credits` (with expiry tracking)
+   - `MembershipType` (enum with associated behavior)
+
+3. **Aggregates for consistency:**
+   - `Booking` aggregate root managing booking lifecycle
+   - References other aggregates by ID (loose coupling)
+   
+4. **Domain services for cross-cutting logic:**
+   - `ClassSchedulingService` for room/time conflicts
+   
+5. **Domain exceptions for business rules:**
+   - `ClassFullException`, `InsufficientCreditsException`, etc.
+   - Business-meaningful errors, not technical ones
+
+**Updated structure:**
+```
+gym_booking/
+  ├── domain/
+  │   ├── entities/
+  │   │   ├── member.py
+  │   │   ├── fitness_class.py
+  │   │   └── booking.py
+  │   ├── value_objects/
+  │   │   ├── email_address.py
+  │   │   ├── time_slot.py
+  │   │   ├── class_capacity.py
+  │   │   ├── credits.py
+  │   │   └── membership_type.py
+  │   ├── services/
+  │   │   └── class_scheduling_service.py
+  │   └── exceptions.py
+  ├── application/
+  │   └── booking_service.py  # Now simpler!
+  ├── infrastructure/...
+  └── tests/
+      ├── test_member.py           # Updated for rich model
+      ├── test_fitness_class.py    # Updated for rich model
+      ├── test_value_objects.py    # New
+      └── test_booking_aggregate.py  # New
+```
+
+**What we gained:**
+- Business rules live in domain objects, not scattered in services
+- Invalid states are impossible (`Credits` can't be negative or expired)
+- Domain speaks the business language (`TimeSlot`, not `(day, time)` tuples)
+- Application layer got simpler (domain does more work)
+- Tests are more expressive (test business concepts, not primitives)
+
+**But there's still a challenge:**
+- Application layer still has some messy orchestration code
+- Use cases aren't formally structured
+- Transaction boundaries unclear
+- Error handling inconsistent across use cases
+
+## Transition to Chapter 6
+
+Our domain is rich. Objects enforce their own rules. Invalid states are impossible. But look at our application layer:
+
+```python
+# application/booking_service.py
+class BookingService:
+    def book_class(self, member_id, class_id):
+        # Orchestration code that's growing...
+        member = self.member_repo.get(member_id)
+        fitness_class = self.class_repo.get(class_id)
+        
+        if fitness_class.is_full():
+            raise ClassFullException()
+        
+        # More validation...
+        # Create booking...
+        # Send notifications...
+        # Save everything...
+        # But in what order? What if one step fails?
+```
+
+This orchestration is important, but it's getting messy. We need:
+- **Clear use case boundaries:** What's one atomic operation?
+- **Transaction management:** If email fails, do we rollback the booking?
+- **Consistent error handling:** How do we report different failure modes?
+- **Input validation:** Where do we validate command parameters?
+
+In Chapter 6, we'll formalize the **Application Layer** with proper use cases. We'll learn the Command/Result pattern. We'll define transaction boundaries. We'll separate orchestration from business logic. The domain will stay pure. The application layer will become a clean, organized conductor.
+
+**The challenge:** "When someone books a class, we need to send a confirmation email. If the email fails, should we rollback the booking? Where does this logic belong?"
+
+That's next.
 
 ## Summary
 
