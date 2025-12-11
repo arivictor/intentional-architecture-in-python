@@ -1,10 +1,70 @@
 # Chapter 10: Conclusion
 
-Remember the script from Chapter 1? Everything in one place. Member data, class bookings, business rules, database calls—all tangled together. It worked, but every change rippled unpredictably. Testing meant running the whole thing. Understanding it meant holding the entire structure in your head.
+## The Journey We've Taken
 
-Now look at Chapter 9. The same gym booking system, but intentionally structured. Domain models that enforce business rules. Use cases that orchestrate workflows without containing logic. Ports that let you swap infrastructure. Tests at every level that let you change with confidence.
+Remember the script from Chapter 1? Everything in one place—200 lines of procedural code. Member data, class bookings, business rules, all tangled together in global dictionaries. It worked, but every change rippled unpredictably. Testing meant running the whole thing. Understanding it meant holding the entire structure in your head.
 
-The difference isn't complexity for its own sake. It's control. The first version is hostage to its own structure. The second gives you options. When requirements change—and they will—you know exactly where to look and what to modify. That's what intentional architecture buys you.
+Now look at what we built through Chapters 2-9:
+
+**Chapter 1:** Simple procedural CLI script
+```python
+members = {}  # Global dictionary
+def book_class(member_id, class_id):
+    # Everything mixed together
+```
+
+**Chapter 2:** Applied SOLID principles → Classes with strategies
+```python
+class Member:
+    # SRP: One responsibility
+class PricingStrategy:
+    # OCP: Open for extension
+```
+
+**Chapter 3:** Added Test-Driven Development → Test suite with confidence
+```python
+def test_member_can_book():
+    # Red-Green-Refactor cycle
+```
+
+**Chapter 4:** Organized into layers → Clear separation of concerns
+```
+domain/ application/ infrastructure/ interface/
+```
+
+**Chapter 5:** Built rich domain model → Value objects and entities
+```python
+class Credits:  # Value object
+class Member:   # Rich entity
+```
+
+**Chapter 6:** Formalized use cases → Command/Result orchestration
+```python
+class BookClassUseCase:
+    def execute(self, command) -> result
+```
+
+**Chapter 7:** Hexagonal architecture → Ports and adapters
+```python
+class MemberRepository(ABC):  # Port
+class SqliteMemberRepository(MemberRepository):  # Adapter
+```
+
+**Chapter 8:** Multiple interfaces → REST API + CLI
+```python
+@app.post("/api/bookings")  # API interface
+def book_command():  # CLI interface
+# Both use same use cases!
+```
+
+**Chapter 9:** Put it all together → Complete feature using all patterns
+```python
+# TDD → Domain → Use Case → Port → Adapter → Interface
+```
+
+The same gym booking system, but intentionally structured. Domain models that enforce business rules. Use cases that orchestrate workflows without containing logic. Ports that let you swap infrastructure. Tests at every level that let you change with confidence.
+
+The difference isn't complexity for its own sake. It's control. The first version is hostage to its own structure. The final version gives you options. When requirements change—and they will—you know exactly where to look and what to modify. That's what intentional architecture buys you.
 
 But here's what this book doesn't claim: that every system needs every pattern.
 
