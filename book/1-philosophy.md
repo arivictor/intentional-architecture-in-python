@@ -1,27 +1,20 @@
 # Chapter 1: Philosophy
 
-Software architecture is a discipline of intentional decisions. A mindset. A way of understanding the system beneath the code. It’s not just folder structures, and it is not obedience to the first pattern you learned.
-
-Architecture is choosing the parts of your system that must be easy to change, and protecting them from the parts that won't be. For example, the business logic your business runs on is less likely to change than the type of storage service you use. We use architecture to separate those concerns and ensure that when one changes, the other remains unaffected.
+Software architecture is a discipline of intentional decisions. A mindset. A way of understanding the system beneath the code. Architecture is choosing the parts of your system that must be easy to change, and protecting them from the parts that won't be. For example, the business logic your business runs on is less likely to change than the type of storage service you use. We use architecture to separate those concerns and ensure that when one changes, the other remains unaffected.
 
 Everything around your business logic will shift. Frameworks will change. Databases will be replaced. APIs will evolve. Business priorities will absolutely change. If the heart of your system is dependent on any of these, your codebase becomes hostage to technical detail. That’s how software becomes a burden. Not through bad syntax or poor variable naming, but through uninformed decisions made early and left to solidify.
 
-Good architecture is intentional.
-
 Thinking like an architect means shifting the question from "What pattern should I use?" to "What decision am I protecting here?" The pattern becomes a consequence, not a prescription. Good architecture comes from judgment: the ability to reason about constraints, tradeoffs, and the long-term impact of what seems like a small choice today.
 
-A good architect doesn’t follow rules. They follow reasons. Once you understand the reasons, the rules reveal themselves.
-
+Good architecture is intentional.
 
 ## Architecture Exists Because Change Exists
 
 Architecture is the discipline of preparing for the right kinds of change, not every kind of change. If nothing ever changed, you wouldn't need architecture. You could write a single function that solves the problem and walk away. The code would run forever exactly as written. But that's not the world we live in.
 
-Change is inevitable. The business will pivot. The database will be migrated. The API you depend on will deprecate. Your users will demand features you never anticipated. These changes are not failures of planning. They're the reality of software that matters enough to still be around.
+But change is inevitable, the business will pivot, the database will be migrated, the API framework you depend on will deprecate. Your users will demand features you never anticipated. These changes are not failures of planning. They're the reality of software that matters enough to still be around.
 
 Architecture exists to absorb change in the places where it hurts least. It's about identifying what will change and what won't, then organising your system accordingly. You don't protect everything. You can't. You protect the business logic, the part that represents the actual value of your system, and you make everything else replaceable.
-
-This is why frameworks feel wrong when you let them dictate your business logic. The framework will change. Your business rules shouldn't have to. Good architecture keeps them separate so when the framework evolves, your business logic remains untouched.
 
 The question isn't "will this change?" The question is "when this changes, how much of my system has to rewrite itself?"
 
@@ -29,56 +22,63 @@ The question isn't "will this change?" The question is "when this changes, how m
 
 The system you end up with is a direct reflection of the constraints you operate under. You don't get to design in a vacuum. You have deadlines. You have team size. You have legacy systems to integrate with, limited budgets, performance requirements, and stakeholder expectations. These constraints aren't obstacles to good architecture, they're the very thing that defines it.
 
-The same gym booking system built under different constraints, produces radically different architectures. Let's look at this through examples.
+Let's explore some common constraints and how they shape architectural decisions.
 
 ### Team Size Constraints
 
 #### Solo Developer vs. 50-Person Team
 
-**Solo developer building a side project:**
+**Solo developer building a side project**
 
-You know the entire codebase. You can change anything without coordination. Communication overhead is zero. Your constraint is time, you're building this after work.
+You know the entire codebase. You can change anything without coordination. Communication overhead is zero. Your code is a 1-to-1 mapping of your thought process. Your constraint is time, you're building this after work, you just want to see if it works.
 
 **The right architecture:** Simple. Direct. A single file might be fine. Use SQLite, not PostgreSQL with read replicas. Skip the abstraction layers. You can refactor later if it grows. The code lives in your head, so documentation can be minimal.
+
+Consider a simple function in a system to book a class:
 
 ```python
 # This is fine for a solo project
 def book_class(member_id, class_id):
-    conn = sqlite3.connect('gym.db')
+    conn = sqlite3.connect('app.db')
     cursor = conn.cursor()
     cursor.execute("INSERT INTO bookings ...")
     conn.commit()
+    
+    mail = smtplib.SMTP('smtp.example.com')
+    mail.sendmail("Booking confirmed!", member_email)
 ```
 
-While it contravenes common architectural advice, this approach minimises overhead. You can iterate quickly without unnecessary complexity. This is an intentional choice based on your constraints. This is architecture.
-
-> We say this contravenes common architectural advice because many resources advocate for layered architectures, separation of concerns, and other patterns even in small projects. However, in this context, the solo developer's constraints prioritise speed and simplicity over formal structure. The business logic of booking a class is intentionally coupled with the database interaction to reduce complexity and development time. This decision is made with the understanding that the project may evolve, and refactoring can occur later if necessary.
+While it contravenes common architectural advice such as separation of concerns and layering, this approach minimises overhead. You can iterate quickly without unnecessary complexity. This is an intentional choice based on your constraints. This is architecture.
 
 **50-person team maintaining production software:**
 
-No one knows the entire codebase. Changes require coordination. Communication overhead is high. Multiple teams touch the same system. Your constraint is coordination, you need clear boundaries.
+No one knows the entire codebase. Changes require coordination. Communication overhead is high. Multiple teams touch the same system. Your constraint is coordination, you need clear boundaries to ensure one persons pull request is not another persons nightmare.
 
 **The right architecture:** Layered. Explicit. Well-documented. Clear ownership of modules. Comprehensive tests so changes don't break other teams' work. Abstractions that let teams work independently.
 
 ```python
-# This is necessary for a large team
 class BookingService:
     """
     Owned by: Booking Team
-    Dependencies: Member Service, Class Service
+    Dependencies: Database, Notification Service
     """
-    def _init_(self, database):
+    def _init_(self, database, notifier):
         self.database = database # Injected dependency
+        self.notifier = notifier # Injected dependency
         
     def book_class(self, member_id: str, class_id: str) -> Booking:
-        # Clear boundaries, documented interfaces
-        # Other teams can understand without asking
+        # Coordinates what needs to happen to book a class
+        # doesn't know about database or notification details
+        # and doesn't introduce new logic itself
         self.database.insert_booking(member_id, class_id)
+        self.notifier.send_confirmation(member_id, "Booking confirmed!")
 ```
 
-This example abstracts away technical details using classes and dependency injection, which helps manage complexity in a large team. Clear ownership and documentation reduce the cognitive load on developers who need to understand only their part of the system.
+This example abstracts away technical details using classes and dependency injection, which helps manage complexity in a large team. The service becomes a clear use case or workflow: it handles coordinating the booking process without getting bogged down in how the database or notification system works. 
 
-The solo developer's architecture would drown the large team in confusion. The large team's architecture would paralyse the solo developer with overhead.
+This separation allows different teams to own different parts of the system without stepping on each other's toes. If the database team changes how bookings are stored, the booking service doesn't need to change. If the notification system is replaced, the booking service remains unaffected.
+
+The solo developer approach would be chaotic in a large team. The large team approach would be overkill for a solo developer. Architecture is not writing the most complex code possible. It's writing the right code for your constraints.
 
 ### Project Maturity Constraints
 
@@ -92,7 +92,7 @@ No existing code to work around. You choose your database, your framework, your 
 
 ```python
 # Start here
-members = []  # In-memory is fine for proof of concept
+members = []  # In-memory is fine for a proof of concept
 
 def create_member(name, email):
     members.append({'name': name, 'email': email})

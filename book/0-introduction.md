@@ -2,9 +2,9 @@
 
 You don't have to be a software architect to find yourself architecting software.
 
-Architecture happens the moment your code stops being trivial. Most developers stumble into architecture the same way they stumble onto a solution: by accident. One day you're writing a script, and the next you're responsible for a growing system with expectations, users, and consequences. Along the way you had to make decisions about how to organise code, where logic belongs, and how different parts of the system interact. But without a clear framework for those decisions, the codebase slowly becomes tangled and hard to change.
+Architecture happens the moment your code stops being trivial. Most developers stumble into architecture the same way they stumble onto a solution: by accident. One day you're writing a script, and the next you're responsible for a growing system with expectations, users, and consequences. Along the way you made decisions about how to organise code, where logic belongs, and how different parts of the system interact. But without a clear decision framework for those choices, the codebase slowly becomes tangled and hard to change.
 
-That is where architecture helps.
+That is where intentional architecture helps.
 
 You have probably heard the terms: Clean Architecture, Domain-Driven Design, Hexagonal, SOLID principles. They sound like answers. But when you tried to learn them, the concepts felt distant, too hard to connect to the code you write every day. Many patterns seem designed for massive enterprise systems with teams of dozens of developers.
 
@@ -39,31 +39,6 @@ You'll learn to answer three questions that define good architecture:
 This book takes the principles that matter and shows you how to apply them in a practical manner. You'll learn how to structure a project, no matter its size, so that complexity becomes manageable instead of overwhelming. You'll see how to model business logic in a way that reflects the real world, making it easier to understand and change. And you'll discover how to isolate technical details so that your core logic remains stable even as technologies evolve.
 
 More importantly you will learn software architecture isn't a set of rules to follow. It's a way of thinking about code. Quick scripts and intentionally messy code have their place, sometimes they're exactly what the moment requires. This book offers principles that serve you when complexity grows and teaches you to apply them with intention, not obligation. It's important you do not walk away from this book thinking every project moving forward needs to follow these patterns rigidly. Instead, you'll gain the discernment to know when and how to apply them effectively. The implementations I show are just one of many ways to do it. The goal is to help you develop your own architectural intuition.
-
-## The Running Example: Why a Gym Booking System?
-
-Throughout this book, we'll build and evolve a gym class booking system for our ficticious fitness company XYZ Fitness, from proof of concept to production ready. Members book fitness classes. Classes have capacity limits. Some members have premium subscriptions. Bookings can be cancelled. Notifications get sent. It's straightforward enough to understand in minutes, but rich enough to expose real architectural decisions.
-
-Why this **domain**? Three reasons.
-
----
-**A Note on Terminology** 
-
-You'll see the word "domain" used in three distinct ways throughout this book:
-
-- **Domain** (the business problem): The gym booking system, the real-world problem we're solving with code
-- **Domain layer** (architecture): The specific layer of code (`domain/` directory) that contains the business logic
-- **Domain model** (code representation): The entities, value objects, and services that model the business
-
-The domain (problem) is modeled by the domain model (code), which lives in the domain layer (architecture). Context makes the meaning clear, but it's worth noting upfront.
-
----
-
-First, it's familiar. You don't need to learn a complex business domain before you can focus on architecture. Most people have used a booking system. You already understand the core concepts, so you can concentrate on how the code is organised, not what it's trying to do.
-
-Second, it's complex enough to matter. A single function won't cut it. You'll face questions about where logic belongs, how to model business rules, how to handle external dependencies. The same questions you face in real projects.
-
-Third, it evolves naturally. As we progress through chapters, the system grows in sophistication. We start simple and add complexity intentionally, showing you how architectural decisions change as requirements shift. You'll see the reasoning behind each choice, not just the final structure.
 
 ## What This Book Is Not
 
