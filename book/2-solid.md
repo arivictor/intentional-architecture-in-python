@@ -1,36 +1,66 @@
-# Chapter 2: SOLID
+# Chapter 2: SOLID Principles
 
 Philosophy only takes you so far. Architecture isn't built on principles alone, it's built on decisions made when code demands them. Chapter 1 gave you the mindset. Now we're going to apply it.
 
-Our proof of concept application is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. Mission accomplished.
+## Where We Left Off
 
-Then requirements change.
-
-The gym wants to send email confirmations when members book classes. They want different pricing for premium vs. basic members. They want to validate email addresses. They want to persist data to a database instead of losing everything when the application closes. They also want to allow members to book and manage their own classes via a web interface.
-
-You could add most of this to the existing functions. Throw in some SMTP code here, database connections there, validation checks everywhere. It would work. But let's see what happens.
-
-Here's `book_class()` with email notifications added:
+In Chapter 1, we inherited a simple but functional gym booking system. Here's what we had:
 
 ```python
-def book_class(booking_id, member_id, class_id):
+# gym_booking.py - The complete working script
+from datetime import datetime
+import uuid
+
+# Our "database" - just dictionaries in memory
+members = {}
+classes = {}
+bookings = {}
+
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    members[member_id] = {
+        'id': member_id,
+        'name': name,
+        'email': email,
+        'membership_type': membership_type,
+        'credits': 20 if membership_type == 'premium' else 10
+    }
+    print(f"✓ Created member: {name} ({membership_type})")
+
+def create_class(class_id, name, capacity, day, start_time):
+    """Create a new fitness class."""
+    classes[class_id] = {
+        'id': class_id,
+        'name': name,
+        'capacity': capacity,
+        'day': day,
+        'start_time': start_time,
+        'bookings': []
+    }
+    print(f"✓ Created class: {name} on {day} at {start_time}")
+
+def book_class(member_id, class_id):
     """Book a member into a class."""
     if member_id not in members:
-        raise ValueError("Member not found")
-    
+        print("✗ Member not found")
+        return
     if class_id not in classes:
-        raise ValueError("Class not found")
+        print("✗ Class not found")
+        return
     
     member = members[member_id]
     fitness_class = classes[class_id]
     
+    # Business rules
     if len(fitness_class['bookings']) >= fitness_class['capacity']:
-        raise ValueError("Class is full")
-    
+        print("✗ Class is full")
+        return
     if member['credits'] <= 0:
-        raise ValueError("Insufficient credits")
+        print("✗ Insufficient credits")
+        return
     
-    # Create booking
+    # Create the booking
+    booking_id = uuid.uuid4().hex
     bookings[booking_id] = {
         'id': booking_id,
         'member_id': member_id,
@@ -39,194 +69,381 @@ def book_class(booking_id, member_id, class_id):
         'booked_at': datetime.now()
     }
     
+    # Update state
     member['credits'] -= 1
     fitness_class['bookings'].append(member_id)
     
-    # NEW: Send email confirmation
-    import smtplib
-    server = smtplib.SMTP('smtp.gmail.com', 587)
-    server.starttls()
-    server.login("gym@example.com", "password")
-    message = f"Subject: Booking Confirmed\n\nHi {member['name']}, your booking for {fitness_class['name']} is confirmed."
-    server.sendmail("gym@example.com", member['email'], message)
-    server.quit()
+    print(f"✓ Booked {member['name']} into {fitness_class['name']}")
+    print(f"  Booking ID: {booking_id}")
+    print(f"  Credits remaining: {member['credits']}")
+
+def cancel_booking(booking_id):
+    """Cancel a booking and refund the credit."""
+    if booking_id not in bookings:
+        print("✗ Booking not found")
+        return
     
-    print(f"Booking confirmed for {member['name']} in {fitness_class['name']}")
-    return bookings[booking_id]
+    booking = bookings[booking_id]
+    member = members[booking['member_id']]
+    fitness_class = classes[booking['class_id']]
+    
+    # Refund and update
+    member['credits'] += 1
+    fitness_class['bookings'].remove(booking['member_id'])
+    booking['status'] = 'cancelled'
+    
+    print(f"✓ Cancelled booking {booking_id}")
+    print(f"  Refunded 1 credit to {member['name']}")
+
+# ... list_members(), list_classes(), list_bookings(), show_help(), main() ...
 ```
 
-This works. But notice what just happened:
+This script worked. It was simple, understandable, and got the job done. Members could book classes. Classes tracked capacity. Bookings got confirmed and cancelled. For a proof of concept, it was exactly what was needed.
 
-1. **You can't test the booking logic without sending real emails.** Every test hits an SMTP server.
-2. **The function is now slow.** Network calls every time you book a class.
-3. **It's fragile.** If the email server is down, bookings fail entirely.
-4. **It's hard to change.** Switching email providers means digging into booking logic.
+## The New Challenge
 
-We've tangled two unrelated concerns: booking logic and email delivery. They change for different reasons, but now they're locked together. This is what happens when code starts to strain. This is the signal. The code is asking for better structure. 
+A few weeks pass. The system is being used daily. Then new requirements arrive:
 
-It's asking for SOLID.
+1. **Email validation:** We need to prevent members from registering with invalid email addresses. We've had several typos already.
+2. **Prevent duplicates:** Members are accidentally registered twice with the same email. We need to check for duplicates.
+3. **Premium member features:** Premium members should get priority booking and special pricing. The business logic for different membership types is growing.
 
-**SOLID is an acronym.** Five principles that guide how you write classes and structure code: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion.
+Simple enough, right? Let's add these features to our existing code.
 
-These aren't theoretical rules. They're patterns that emerged from watching what makes code rigid and what makes it flexible. They give you a vocabulary for recognising problems and reasoning about solutions.
+## Why Our Current Approach Struggles
 
-Let's work through each one. Not as abstract theory, but as solutions to the actual pain points we're now experiencing with our script.
+### Problem 1: The `create_member()` Function Is Getting Bloated
+
+Let's add email validation to `create_member()`:
+
+```python
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    # NEW: Email validation
+    if '@' not in email or '.' not in email:
+        print("✗ Invalid email address")
+        return
+    
+    # NEW: Check for duplicates
+    for existing_member in members.values():
+        if existing_member['email'] == email:
+            print("✗ Email already registered")
+            return
+    
+    # NEW: More validation
+    if membership_type not in ['basic', 'premium']:
+        print("✗ Invalid membership type")
+        return
+    
+    members[member_id] = {
+        'id': member_id,
+        'name': name,
+        'email': email,
+        'membership_type': membership_type,
+        'credits': 20 if membership_type == 'premium' else 10
+    }
+    print(f"✓ Created member: {name} ({membership_type})")
+```
+
+The function is growing. Validation logic is mixing with data creation. What happens when we need to:
+- Add phone number validation?
+- Check password strength?
+- Integrate with an external verification service?
+
+The function keeps getting longer. It's doing too many things.
+
+### Problem 2: Membership Type Logic Is Scattered Everywhere
+
+Now premium members want priority booking when classes are near full. Let's update `book_class()`:
+
+```python
+def book_class(member_id, class_id):
+    """Book a member into a class."""
+    if member_id not in members:
+        print("✗ Member not found")
+        return
+    if class_id not in classes:
+        print("✗ Class not found")
+        return
+    
+    member = members[member_id]
+    fitness_class = classes[class_id]
+    
+    spots_left = fitness_class['capacity'] - len(fitness_class['bookings'])
+    
+    # NEW: Premium members can book when only 2 spots left
+    # Basic members can only book when 3+ spots left
+    if member['membership_type'] == 'premium':
+        if spots_left < 1:
+            print("✗ Class is full")
+            return
+    else:  # basic member
+        if spots_left < 3:
+            print("✗ Class is full (priority booking for premium members)")
+            return
+    
+    if member['credits'] <= 0:
+        print("✗ Insufficient credits")
+        return
+    
+    # Create booking...
+    # (rest of the function)
+```
+
+Now we have `if member['membership_type'] == 'premium'` checks appearing throughout the code. What happens when we add:
+- Student memberships?
+- Corporate memberships?
+- Discount programs?
+
+We'll have membership type checks scattered across every function. Every new membership type means modifying multiple functions.
+
+### The Pain Is Real
+
+Our simple script is straining. The code is:
+- **Hard to change:** Adding a new membership type touches multiple functions
+- **Hard to test:** How do you test email validation without running the whole program?
+- **Hard to understand:** Business rules are buried in if-statements
+- **Fragile:** Changing one function can break others
+
+This is the signal. The code is asking for better structure. It's asking for SOLID.
+
+## What Is SOLID?
+
+**SOLID is an acronym** for five principles that guide how you write classes and structure code:
+
+- **S**ingle Responsibility Principle
+- **O**pen/Closed Principle
+- **L**iskov Substitution Principle
+- **I**nterface Segregation Principle
+- **D**ependency Inversion Principle
+
+These aren't theoretical rules. They're patterns that emerged from watching what makes code rigid and what makes it flexible. They give you a vocabulary for recognizing problems and reasoning about solutions.
+
+Let's work through each one, using our actual pain points as motivation.
 
 ## Single Responsibility Principle
 
 **A class should have one reason to change.**
 
-Simple to state, harder to recognise in practice. The confusion comes from the word "responsibility." It sounds like "a class should do one thing," which leads people to over-fragment their code into tiny classes that do almost nothing. That's not what this means.
+The confusion comes from the word "responsibility." It doesn't mean "do one thing." It means "have one reason to change."
 
-A responsibility is a reason for change. More specifically, it's a stakeholder or concern that might request a change. If two different people, for two different reasons, might ask you to modify the same class, that class has multiple responsibilities.
+A responsibility is a stakeholder or concern that might request a change. If two different people, for two different reasons, might ask you to modify the same class, that class has multiple responsibilities.
 
-Here's what violation looks like:
+### Refactoring Step 1: Extract `Member` Class
 
-```python
-class Member:
-    def __init__(self, name: str, email: str, membership_type: str):
-        self.name = name
-        self.email = email
-        self.membership_type = membership_type
-        self.bookings = []  # List of FitnessClass objects this member has booked
-    
-    def book_class(self, fitness_class):
-        if len(fitness_class.bookings) >= fitness_class.capacity:
-            raise ValueError("Class is full")
-        
-        if self.membership_type == "premium":
-            price = 0
-        elif self.membership_type == "basic":
-            price = 10
-        else:
-            price = 15
-        
-        self.bookings.append(fitness_class)
-        fitness_class.bookings.append(self)
-        
-        # Send confirmation email
-        import smtplib
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login("gym@example.com", "password")
-        message = f"Confirmed: {fitness_class.name}"
-        server.sendmail("gym@example.com", self.email, message)
-        server.quit()
-        
-        return price
-```
+Our `create_member()` function mixes validation with data creation. Let's separate these concerns.
 
-This class is doing too much. It's handling member data, booking logic, pricing rules, and email notifications. Four different concerns, four different reasons to change.
-
-If the pricing model changes, you modify this class. If the email provider changes, you modify this class. If the booking rules change, you modify this class. If you need to store member data differently, you modify this class.
-
-Each change risks breaking something unrelated. Testing becomes a nightmare because you can't test booking logic without also dealing with email infrastructure.
-
-Here's the same functionality, separated:
+First, let's create a `Member` class that validates itself:
 
 ```python
 class Member:
-    def __init__(self, name: str, email: str, membership_type: str):
+    """Represents a gym member with validation."""
+    
+    def __init__(self, member_id, name, email, membership_type):
+        # Validation happens in the constructor
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        if membership_type not in ['basic', 'premium']:
+            raise ValueError(f"Invalid membership type: {membership_type}")
+        
+        self.id = member_id
         self.name = name
         self.email = email
         self.membership_type = membership_type
-        self.bookings = []  # List of FitnessClass objects this member has booked
-
-
-class PricingService:
-    def calculate_price(self, member: Member) -> float:
-        if member.membership_type == "premium":
-            return 0
-        elif member.membership_type == "basic":
-            return 10
-        else:
-            return 15
-
-
-class BookingService:
-    def __init__(self, pricing: PricingService, notifications):
-        self.pricing = pricing
-        self.notifications = notifications
+        self.credits = 20 if membership_type == 'premium' else 10
     
-    def book_class(self, member: Member, fitness_class):
-        if len(fitness_class.bookings) >= fitness_class.capacity:
-            raise ValueError("Class is full")
-        
-        price = self.pricing.calculate_price(member)
-        
-        member.bookings.append(fitness_class)
-        fitness_class.bookings.append(member)
-        
-        self.notifications.send_confirmation(member, fitness_class)
-        
-        return price
+    def __repr__(self):
+        return f"Member({self.name}, {self.email}, {self.membership_type})"
 ```
 
-Now `Member` represents member data. One responsibility. If you need to add a phone number or track membership duration, you change `Member`. Nothing else.
+Now our `create_member()` function becomes simpler:
 
-**Note:** The Member class here is what we call an **anemic domain model**—
-a class that holds data but contains little or no business logic, delegating 
-all behavior to services. While this approach can feel wrong (shouldn't objects 
-have behavior?), it's a valid starting point and works well for demonstrating 
-SOLID principles. In Chapter 5, we'll explore when and how to enrich domain 
-objects with behavior, moving beyond simple data containers. For now, focus 
-on the separation of responsibilities.
+```python
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    # Check for duplicates
+    for existing_member in members.values():
+        if existing_member.email == email:
+            print("✗ Email already registered")
+            return
+    
+    try:
+        member = Member(member_id, name, email, membership_type)
+        members[member_id] = member  # Store Member object, not dict
+        print(f"✓ Created member: {name} ({membership_type})")
+    except ValueError as e:
+        print(f"✗ {e}")
+```
 
-Pricing lives in `PricingService`. If pricing rules change, that's the only place you look. Booking coordination lives in `BookingService`. Notifications live elsewhere.
+**What changed?**
+- `Member` class handles member data and validation
+- `create_member()` function handles duplicate checking and storage
+- If email validation rules change, we only modify `Member`
+- If storage logic changes, we only modify `create_member()`
 
-Each class has one axis of change. One reason to open the file. Testing becomes simpler because you can test pricing logic without spinning up email servers.
+One responsibility per component. This is SRP in action.
 
-This is what maintainability looks like. Not perfection, not academic purity. Just clear boundaries that make change safer.
+### Refactoring Step 2: Extract `FitnessClass` Class
+
+Let's do the same for fitness classes:
+
+```python
+class FitnessClass:
+    """Represents a fitness class."""
+    
+    def __init__(self, class_id, name, capacity, day, start_time):
+        if capacity <= 0:
+            raise ValueError("Capacity must be positive")
+        
+        self.id = class_id
+        self.name = name
+        self.capacity = capacity
+        self.day = day
+        self.start_time = start_time
+        self.bookings = []  # List of member IDs
+    
+    def spots_available(self):
+        """Calculate available spots."""
+        return self.capacity - len(self.bookings)
+    
+    def is_full(self):
+        """Check if class is full."""
+        return self.spots_available() <= 0
+    
+    def __repr__(self):
+        return f"FitnessClass({self.name}, {self.day} {self.start_time})"
+```
+
+Now `create_class()` becomes:
+
+```python
+def create_class(class_id, name, capacity, day, start_time):
+    """Create a new fitness class."""
+    try:
+        fitness_class = FitnessClass(class_id, name, capacity, day, start_time)
+        classes[class_id] = fitness_class  # Store FitnessClass object
+        print(f"✓ Created class: {name} on {day} at {start_time}")
+    except ValueError as e:
+        print(f"✗ {e}")
+```
+
+### Refactoring Step 3: Extract `Booking` Class
+
+Finally, let's create a proper `Booking` class:
+
+```python
+class Booking:
+    """Represents a class booking."""
+    
+    def __init__(self, booking_id, member_id, class_id):
+        self.id = booking_id
+        self.member_id = member_id
+        self.class_id = class_id
+        self.status = 'confirmed'
+        self.booked_at = datetime.now()
+    
+    def cancel(self):
+        """Mark booking as cancelled."""
+        self.status = 'cancelled'
+    
+    def __repr__(self):
+        return f"Booking({self.id}, status={self.status})"
+```
+
+Now `book_class()` uses our classes:
+
+```python
+def book_class(member_id, class_id):
+    """Book a member into a class."""
+    if member_id not in members:
+        print("✗ Member not found")
+        return
+    if class_id not in classes:
+        print("✗ Class not found")
+        return
+    
+    member = members[member_id]  # Now a Member object
+    fitness_class = classes[class_id]  # Now a FitnessClass object
+    
+    # Business rules
+    if fitness_class.is_full():
+        print("✗ Class is full")
+        return
+    if member.credits <= 0:
+        print("✗ Insufficient credits")
+        return
+    
+    # Create booking
+    booking_id = uuid.uuid4().hex
+    booking = Booking(booking_id, member_id, class_id)
+    bookings[booking_id] = booking
+    
+    # Update state
+    member.credits -= 1
+    fitness_class.bookings.append(member_id)
+    
+    print(f"✓ Booked {member.name} into {fitness_class.name}")
+    print(f"  Booking ID: {booking_id}")
+    print(f"  Credits remaining: {member.credits}")
+```
+
+**Progress check:**
+- We still have dictionaries (`members`, `classes`, `bookings`)
+- We still have functions (`create_member`, `book_class`, etc.)
+- We still have the command loop in `main()`
+- But now we have **classes with behavior** instead of raw dictionaries
+- Validation is encapsulated
+- Business logic is clearer
+
+This is incremental refactoring. We haven't changed everything. We've made it better, step by step.
 
 ## Open/Closed Principle
 
 **Software entities should be open for extension, closed for modification.**
 
-This principle feels paradoxical at first. How can something be both open and closed? The key is in understanding what "extension" means in practice.
+This principle feels paradoxical. How can something be both open and closed? The key is understanding what "extension" means in practice.
 
-The goal is to add new behaviour without changing existing code. When new requirements arrive, you want to extend the system by adding new classes or modules, not by modifying working code. Modifying working code risks breaking it. Adding new code keeps the old code stable.
+The goal is to add new behavior without changing existing code. When new requirements arrive, you extend the system by adding new classes, not by modifying working code.
 
-The `PricingService` we just extracted respects Single Responsibility, pricing logic lives in one place. But it violates Open/Closed. Every time a new membership type appears, you have to modify the working code. Watch what happens as requirements evolve:
+### The Problem: Adding Student Pricing
+
+The gym wants to add student memberships with special pricing:
+- Premium: Free classes
+- Basic: $10 per class
+- **Student: $5 per class (NEW)**
+
+With our current approach, we'd add if-statements everywhere:
 
 ```python
-class PricingService:
-    def calculate_price(self, member: Member) -> float:
-        # Initial version - three membership types
-        if member.membership_type == "premium":
-            return 0
-        elif member.membership_type == "basic":
-            return 10
-        else:
-            return 15
-
-# New requirement: add pay-per-class pricing
-# New requirement: add off-peak pricing  
-# New requirement: add student discount
-# Now the method looks like this:
-
-class PricingService:
-    def calculate_price(self, member: Member) -> float:
-        if member.membership_type == "premium":
-            return 0
-        elif member.membership_type == "basic":
-            return 10
-        elif member.membership_type == "pay_per_class":
-            return 15
-        elif member.membership_type == "off_peak":
-            return 7
-        elif member.membership_type == "student":
-            return 5
-        # This keeps growing with every new pricing model...
+def book_class(member_id, class_id):
+    # ... validation code ...
+    
+    # Calculate pricing
+    if member.membership_type == 'premium':
+        price = 0
+    elif member.membership_type == 'basic':
+        price = 10
+    elif member.membership_type == 'student':  # NEW
+        price = 5
+    else:
+        price = 15
+    
+    # ... rest of booking ...
 ```
 
-Every new membership type means modifying this method. The method grows. The complexity increases. You're changing working code to add new features.
+Every time a new membership type appears, we modify existing functions. This violates Open/Closed.
 
-Here's the same system, designed for extension:
+### Refactoring: Pricing Strategies
+
+Instead of if-statements, let's use the **Strategy Pattern**:
 
 ```python
 from abc import ABC, abstractmethod
 
 class PricingStrategy(ABC):
+    """Abstract base class for pricing strategies."""
+    
     @abstractmethod
     def calculate_price(self) -> float:
         pass
@@ -234,411 +451,356 @@ class PricingStrategy(ABC):
 
 class PremiumPricing(PricingStrategy):
     def calculate_price(self) -> float:
-        return 0
+        return 0.0
 
 
 class BasicPricing(PricingStrategy):
     def calculate_price(self) -> float:
-        return 10
+        return 10.0
 
 
-class PayPerClassPricing(PricingStrategy):
-    def calculate_price(self) -> float:
-        return 15
-
-
-class Member:
-    def __init__(self, name: str, email: str, pricing: PricingStrategy):
-        self.name = name
-        self.email = email
-        self.pricing = pricing
-    
-    def get_class_price(self) -> float:
-        return self.pricing.calculate_price()
-```
-
-Now when a new membership type appears, you don't modify anything. You add a new class:
-
-```python
 class StudentPricing(PricingStrategy):
     def calculate_price(self) -> float:
-        return 5
+        return 5.0
 ```
 
-The existing code remains untouched. `PremiumPricing` still works. `BasicPricing` still works. You extended the system without modifying it.
+Now update `Member` to use a pricing strategy:
 
-This is the Open/Closed Principle in action. The abstraction (`PricingStrategy`) is closed to modification. The implementations are the extension points.
+```python
+class Member:
+    """Represents a gym member with validation."""
+    
+    def __init__(self, member_id, name, email, membership_type, pricing_strategy):
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.pricing_strategy = pricing_strategy
+        self.credits = 20 if membership_type == 'premium' else 10
+    
+    def get_class_price(self):
+        """Calculate the price for this member."""
+        return self.pricing_strategy.calculate_price()
+```
 
-Does this mean you should abstract everything? No. Premature abstraction is just as harmful as premature optimisation. Start with the if-else chain. When you see the pattern emerging, when a third or fourth case appears, that's when you refactor toward extension points.
+Update `create_member()` to select the right strategy:
 
-The principle guides you toward flexibility where it matters.
+```python
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    # Check for duplicates
+    for existing_member in members.values():
+        if existing_member.email == email:
+            print("✗ Email already registered")
+            return
+    
+    # Select pricing strategy
+    if membership_type == 'premium':
+        pricing = PremiumPricing()
+    elif membership_type == 'basic':
+        pricing = BasicPricing()
+    elif membership_type == 'student':
+        pricing = StudentPricing()
+    else:
+        print(f"✗ Invalid membership type: {membership_type}")
+        return
+    
+    try:
+        member = Member(member_id, name, email, membership_type, pricing)
+        members[member_id] = member
+        print(f"✓ Created member: {name} ({membership_type})")
+    except ValueError as e:
+        print(f"✗ {e}")
+```
+
+**What did we gain?**
+
+Now when we add a new membership type, we:
+1. Create a new `PricingStrategy` class (extension, not modification)
+2. Update the strategy selection in `create_member()` (one place)
+
+We **don't** modify:
+- `Member` class
+- `book_class()` function
+- Any pricing calculation logic
+
+The system is **open for extension** (new pricing strategies) but **closed for modification** (existing strategies don't change).
 
 ## Liskov Substitution Principle
 
 **Objects of a subclass should be replaceable with objects of the superclass without breaking the program.**
 
-This is the most technically worded of the SOLID principles, but the idea is straightforward: if you have a base class and derived classes, you should be able to use any derived class wherever the base class is expected. The program shouldn't break. The behaviour should remain sensible.
+This principle is about maintaining consistent behavior. If you have a base class and derived classes, using any derived class should work wherever the base is expected.
 
-Violations happen when subclasses change the fundamental contract of their parent class. When they require special handling. When using them in place of the parent causes errors or unexpected behaviour.
+### The Problem: Inconsistent Membership Behavior
 
-Here's a violation using membership types:
-
-```python
-class Membership:
-    def __init__(self, member_name: str):
-        self.member_name = member_name
-        self.active = True
-    
-    def book_class(self, fitness_class):
-        if not self.active:
-            raise ValueError("Membership is inactive")
-        # Book the class
-        fitness_class.bookings.append(self.member_name)
-
-
-class GuestPass(Membership):
-    def __init__(self, member_name: str, classes_remaining: int):
-        super().__init__(member_name)
-        self.classes_remaining = classes_remaining
-    
-    def book_class(self, fitness_class):
-        if self.classes_remaining <= 0:
-            raise ValueError("No classes remaining on guest pass")
-        
-        if not self.active:
-            raise ValueError("Membership is inactive")
-        
-        fitness_class.bookings.append(self.member_name)
-        self.classes_remaining -= 1
-```
-
-At first glance this looks reasonable. `GuestPass` is a kind of `Membership`. It extends the booking behaviour to track remaining classes.
-
-But there's a problem. If you write code that expects a `Membership`, and someone passes in a `GuestPass`, you get different errors. A regular membership fails with "Membership is inactive." A guest pass can fail with "No classes remaining on guest pass."
-
-Code that handles errors from `Membership` doesn't know about the guest pass error. The substitution isn't clean. You can't reliably use `GuestPass` wherever you use `Membership` without special case handling.
-
-You might be thinking: why does this matter? Can't we just catch different exceptions? We could. But now imagine you have ten membership types, each with its own failure conditions. Your error handling sprawls across the codebase. Every place that books classes needs to know about every membership type. That's coupling. That's fragility.
-
-Here's a better approach that unifies the contract:
+Let's say we want to add a `GuestPass` membership type. Guests can book classes, but they have limited uses:
 
 ```python
-class Membership:
-    def __init__(self, member_name: str):
-        self.member_name = member_name
+class Member:
+    # ... existing Member code ...
     
-    def can_book(self) -> bool:
-        return True
-    
-    def book_class(self, fitness_class):
-        if not self.can_book():
-            raise ValueError("Cannot book class")
-        fitness_class.bookings.append(self.member_name)
+    def can_book(self):
+        """Check if member can book classes."""
+        return self.credits > 0
 
 
-class RegularMembership(Membership):
-    def __init__(self, member_name: str, active: bool):
-        super().__init__(member_name)
-        self.active = active
+class GuestPass(Member):
+    def __init__(self, member_id, name, email):
+        super().__init__(member_id, name, email, 'guest', PremiumPricing())
+        self.classes_remaining = 3  # Only 3 classes allowed
     
-    def can_book(self) -> bool:
-        return self.active
-
-
-class GuestPass(Membership):
-    def __init__(self, member_name: str, classes_remaining: int):
-        super().__init__(member_name)
-        self.classes_remaining = classes_remaining
-    
-    def can_book(self) -> bool:
-        return self.classes_remaining > 0
-    
-    def book_class(self, fitness_class):
-        if not self.can_book():
-            raise ValueError("Cannot book class")
-        fitness_class.bookings.append(self.member_name)
-        self.classes_remaining -= 1
+    def can_book(self):
+        """Guests check remaining classes, not credits."""
+        return self.classes_remaining > 0  # Different behavior!
 ```
 
-Now both subclasses follow the same contract. They both implement `can_book()`. They both raise the same error message when booking isn't possible. The error handling is consistent.
+This violates LSP. Code that expects `Member.can_book()` to check credits will break with `GuestPass`.
 
-You can write code like this:
+### Refactoring: Unified Interface
+
+Make the behavior consistent:
 
 ```python
-def process_booking(membership: Membership, fitness_class):
-    try:
-        membership.book_class(fitness_class)
-        print("Booking successful")
-    except ValueError as e:
-        print(f"Booking failed: {e}")
+class Member:
+    def __init__(self, member_id, name, email, membership_type, pricing_strategy):
+        # ... validation ...
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.pricing_strategy = pricing_strategy
+        self.credits = 20 if membership_type == 'premium' else 10
+    
+    def can_book(self):
+        """Check if member can book classes."""
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        """Deduct one credit."""
+        if self.credits > 0:
+            self.credits -= 1
+
+
+class GuestPass(Member):
+    def __init__(self, member_id, name, email):
+        super().__init__(member_id, name, email, 'guest', PremiumPricing())
+        self.credits = 3  # Use credits, not a separate field
+    
+    # No need to override can_book() - it works the same way!
 ```
 
-It works the same whether you pass `RegularMembership` or `GuestPass`. No special cases. No surprises. That's Liskov Substitution.
-
-**Why this matters practically:** Without this principle, every function that accepts a parent type needs defensive checks for every possible subtype. Your codebase fills with `if isinstance(obj, GuestPass)` conditions. When you add a new membership type, you hunt through the entire codebase updating those checks. Liskov Substitution prevents this coupling.
-
-Yes, we added a `can_book()` method. Yes, that's more code. But look at what we gained: you can now add ten different membership types without changing any code that processes bookings. Each type encapsulates its own booking rules. The complexity is contained, not scattered.
-
-The principle pushes you toward consistent contracts. When your subclasses honour the same interface and expectations as their parent, your code becomes more reliable. Polymorphism works the way it's supposed to.
+Now `GuestPass` is a true substitute for `Member`. The interface is consistent. Code that works with `Member` works with `GuestPass` without special cases.
 
 ## Interface Segregation Principle
 
 **Clients should not be forced to depend on interfaces they don't use.**
 
-This principle is about keeping interfaces focused. When you define an interface or base class, don't make it a dumping ground for every possible operation. Split it into smaller, more specific interfaces so that classes only depend on what they need.
+This principle is about keeping interfaces focused. Don't create massive interfaces that do everything. Split them into smaller, specific ones.
 
-Large, monolithic interfaces force implementing classes to provide implementations for methods they don't care about. They create false dependencies and make the code harder to understand and change.
+For our gym system, this principle is less critical right now because our classes are still simple. But let's see a quick example.
 
-Here's a violation:
+### Bad: Fat Interface
 
 ```python
-from abc import ABC, abstractmethod
-
 class MemberOperations(ABC):
     @abstractmethod
-    def book_class(self, fitness_class):
-        pass
+    def book_class(self, fitness_class): pass
     
     @abstractmethod
-    def cancel_booking(self, fitness_class):
-        pass
+    def cancel_booking(self, booking): pass
     
     @abstractmethod
-    def make_payment(self, amount: float):
-        pass
+    def make_payment(self, amount): pass
     
     @abstractmethod
-    def update_payment_method(self, payment_method: str):
-        pass
+    def update_payment_method(self, method): pass
     
     @abstractmethod
-    def get_payment_history(self):
-        pass
+    def get_payment_history(self): pass
 ```
 
-This interface defines everything a member might do. Booking, payments, payment history. If you want to implement a class that only handles bookings, you still have to implement all five methods. Even the payment methods you don't care about.
+If you only need booking functionality, you're forced to implement all payment methods too.
+
+### Good: Focused Interfaces
 
 ```python
-class BookingHandler(MemberOperations):
-    def book_class(self, fitness_class):
-        # Actual implementation
-        pass
-    
-    def cancel_booking(self, fitness_class):
-        # Actual implementation
-        pass
-    
-    def make_payment(self, amount: float):
-        raise NotImplementedError("This class doesn't handle payments")
-    
-    def update_payment_method(self, payment_method: str):
-        raise NotImplementedError("This class doesn't handle payments")
-    
-    def get_payment_history(self):
-        raise NotImplementedError("This class doesn't handle payments")
-```
-
-You end up with methods that exist only to throw errors. That's a sign the interface is too broad.
-
-Here's the corrected version:
-
-```python
-from abc import ABC, abstractmethod
-
 class Bookable(ABC):
     @abstractmethod
-    def book_class(self, fitness_class):
-        pass
+    def book_class(self, fitness_class): pass
     
     @abstractmethod
-    def cancel_booking(self, fitness_class):
-        pass
+    def cancel_booking(self, booking): pass
 
 
 class Payable(ABC):
     @abstractmethod
-    def make_payment(self, amount: float):
-        pass
+    def make_payment(self, amount): pass
     
     @abstractmethod
-    def update_payment_method(self, payment_method: str):
-        pass
+    def update_payment_method(self, method): pass
     
     @abstractmethod
-    def get_payment_history(self):
-        pass
+    def get_payment_history(self): pass
 ```
 
-Now you have two focused interfaces. A class that only handles bookings can implement `Bookable`. A class that handles payments can implement `Payable`. A class that does both can implement both.
-
-```python
-class BookingService(Bookable):
-    def book_class(self, fitness_class):
-        # Implementation
-        pass
-    
-    def cancel_booking(self, fitness_class):
-        # Implementation
-        pass
-
-
-class PaymentService(Payable):
-    def make_payment(self, amount: float):
-        # Implementation
-        pass
-    
-    def update_payment_method(self, payment_method: str):
-        # Implementation
-        pass
-    
-    def get_payment_history(self):
-        # Implementation
-        pass
-```
-
-Each class depends only on the interface it needs. No forced methods. No fake implementations. The dependencies are honest.
-
-Small interfaces are easier to implement, easier to test, and easier to understand. They keep your code focused on what matters.
+Now classes implement only what they need. We'll see this principle matter more as we build out the system in later chapters.
 
 ## Dependency Inversion Principle
 
 **High-level modules should not depend on low-level modules. Both should depend on abstractions.**
 
-This is the principle that shifts how you think about dependencies. Most code naturally flows from high-level business logic down to low-level technical details. A booking service calls a database. A notification system calls an email API. The high-level code depends directly on the low-level implementation.
+This is the principle that enables testability and flexibility. Instead of concrete dependencies, depend on abstractions (interfaces).
 
-The problem is that your business logic becomes coupled to technical detail. If you swap databases, you rewrite the business logic. If you change email providers, you modify the notification system. The core logic, which should be stable, becomes tangled with infrastructure, which changes frequently.
+### The Problem: Adding Email Notifications
 
-Dependency Inversion flips this. Instead of high-level code depending on low-level code, both depend on abstractions. The business logic defines what it needs, and the infrastructure implements it.
-
-Here's the violation:
+The gym wants to send email confirmations when bookings are made. Let's add it directly:
 
 ```python
 import smtplib
 
-class BookingService:
-    def book_class(self, member, fitness_class):
-        # Booking logic
-        fitness_class.bookings.append(member)
-        
-        # Send email notification
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login("gym@example.com", "password")
-        message = f"Confirmed: {fitness_class.name}"
-        server.sendmail("gym@example.com", member.email, message)
-        server.quit()
+def book_class(member_id, class_id):
+    # ... validation and booking logic ...
+    
+    # Send email notification
+    server = smtplib.SMTP('smtp.gmail.com', 587)
+    server.starttls()
+    server.login("gym@example.com", "password")
+    message = f"Hi {member.name}, your booking for {fitness_class.name} is confirmed."
+    server.sendmail("gym@example.com", member.email, message)
+    server.quit()
+    
+    print(f"✓ Booked {member.name} into {fitness_class.name}")
 ```
 
-The booking service knows about SMTP. It knows about Gmail. It knows about email infrastructure. If you want to switch to SendGrid, or add SMS notifications, you modify `BookingService`. The core business logic is coupled to the email implementation.
+**Problems:**
+- Can't test booking logic without sending emails
+- Can't change email provider without modifying `book_class()`
+- Function is slow (network calls)
+- Violates SRP (booking + notifications)
 
-Testing is painful. You can't test booking logic without also testing email sending, which means you need a real SMTP server or elaborate mocks.
+### Refactoring: Depend on Abstractions
 
-Here's the corrected version:
+First, define an abstraction:
 
 ```python
-from abc import ABC, abstractmethod
-
 class NotificationService(ABC):
     @abstractmethod
     def send_booking_confirmation(self, member, fitness_class):
         pass
-
-
-class BookingService:
-    def __init__(self, notifications: NotificationService):
-        self.notifications = notifications
-    
-    def book_class(self, member, fitness_class):
-        # Booking logic
-        fitness_class.bookings.append(member)
-        
-        # Notify member
-        self.notifications.send_booking_confirmation(member, fitness_class)
 ```
 
-Now `BookingService` depends on an abstraction: `NotificationService`. It doesn't know about email. It doesn't know about SMTP. It just knows that notifications can be sent.
-
-The implementation details live in a separate class:
+Then create implementations:
 
 ```python
-import smtplib
-
 class EmailNotificationService(NotificationService):
     def send_booking_confirmation(self, member, fitness_class):
         server = smtplib.SMTP('smtp.gmail.com', 587)
         server.starttls()
         server.login("gym@example.com", "password")
-        message = f"Confirmed: {fitness_class.name}"
+        message = f"Hi {member.name}, your booking for {fitness_class.name} is confirmed."
         server.sendmail("gym@example.com", member.email, message)
         server.quit()
-```
 
-If you want SMS notifications, you add a new implementation:
 
-```python
-class SMSNotificationService(NotificationService):
-    def send_booking_confirmation(self, member, fitness_class):
-        # Send SMS via Twilio or similar
-        pass
-```
-
-The booking service remains unchanged. The business logic is isolated from the infrastructure.
-
-Testing becomes trivial. You can test booking logic with a fake notification service:
-
-```python
 class FakeNotificationService(NotificationService):
+    """For testing - doesn't actually send emails."""
     def __init__(self):
         self.sent = []
     
     def send_booking_confirmation(self, member, fitness_class):
         self.sent.append((member, fitness_class))
-
-
-# In tests
-notifications = FakeNotificationService()
-booking_service = BookingService(notifications)
-booking_service.book_class(member, fitness_class)
-
-assert len(notifications.sent) == 1
 ```
 
-No SMTP servers. No network calls. Just pure logic.
+Now `book_class()` depends on the abstraction:
 
-This is Dependency Inversion. The high-level policy (booking) defines what it needs (notifications). The low-level detail (email) implements it. Both depend on the abstraction.
+```python
+# Create a global notification service (we'll improve this in later chapters)
+notification_service = EmailNotificationService()
 
-## When SOLID Doesn't Matter
+def book_class(member_id, class_id):
+    """Book a member into a class."""
+    if member_id not in members:
+        print("✗ Member not found")
+        return
+    if class_id not in classes:
+        print("✗ Class not found")
+        return
+    
+    member = members[member_id]
+    fitness_class = classes[class_id]
+    
+    # Business rules
+    if fitness_class.is_full():
+        print("✗ Class is full")
+        return
+    if not member.can_book():
+        print("✗ Insufficient credits")
+        return
+    
+    # Create booking
+    booking_id = uuid.uuid4().hex
+    booking = Booking(booking_id, member_id, class_id)
+    bookings[booking_id] = booking
+    
+    # Update state
+    member.deduct_credit()
+    fitness_class.bookings.append(member_id)
+    
+    # Send notification (abstraction!)
+    notification_service.send_booking_confirmation(member, fitness_class)
+    
+    print(f"✓ Booked {member.name} into {fitness_class.name}")
+    print(f"  Booking ID: {booking_id}")
+    print(f"  Credits remaining: {member.credits}")
+```
 
-You don't need SOLID everywhere.
+**What did we gain?**
+- Can swap `EmailNotificationService` for `FakeNotificationService` in tests
+- Can add SMS notifications without changing `book_class()`
+- Business logic is separate from infrastructure
+- Testable without network calls
 
-These principles exist to manage complexity and enable change. But not all code is complex. Not all code needs to change. Sometimes you're writing a script that runs once and gets deleted. Sometimes you're prototyping an idea to see if it's worth building. Sometimes you know with certainty that a piece of code will never grow beyond its current form.
+## What We Have Now
 
-In those moments, SOLID is overhead.
+Let's take stock of our progress. We've refactored our procedural script using SOLID principles:
 
-A script that scrapes a website and dumps CSV data? One file. One class if you're feeling formal. Maybe just functions. No abstractions. No interfaces. No dependency injection. You're not building a system. You're solving a problem and moving on.
+**Our code now has:**
+1. **Classes with behavior:** `Member`, `FitnessClass`, `Booking`
+2. **Validation encapsulated:** Email validation lives in `Member.__init__()`
+3. **Pricing strategies:** Easy to add new membership types
+4. **Notification abstraction:** Ready for different notification methods
 
-A prototype to test if an API integration works? Hardcode the credentials. Put everything in `main()`. Get it working. If the prototype succeeds and becomes a real feature, *then* you refactor toward SOLID. Not before.
+**But we still have:**
+- Dictionaries for storage (`members = {}`, `classes = {}`, `bookings = {}`)
+- Procedural functions (`create_member()`, `book_class()`, etc.)
+- Interactive command loop in `main()`
+- Everything in one file (it's getting long!)
+- In-memory storage only (data lost on exit)
 
-The key is recognising the difference between code that's disposable and code that's foundational. Code that'll be read, modified, extended, and maintained over months or years—that's when SOLID thinking pays off. Code that exists to answer a quick question or automate a one-time task, that's when SOLID is waste.
+**Current file structure:**
+```
+gym_booking.py (single file, ~300 lines)
+  ├── Classes: Member, FitnessClass, Booking
+  ├── Strategies: PricingStrategy, PremiumPricing, BasicPricing, StudentPricing
+  ├── Services: NotificationService, EmailNotificationService
+  ├── Data: members={}, classes={}, bookings={}
+  └── Functions: create_member(), book_class(), main(), etc.
+```
 
-This isn't permission to write sloppy code everywhere. It's permission to match your effort to the problem's scope. A throwaway script doesn't need the architecture of a banking system. Don't pretend it does.
+This is good progress, but we're not done. Our classes follow SOLID principles, but the overall structure is still procedural. The code is easier to understand and modify, but it's all tangled together in one file.
 
-Start simple. Add structure when complexity forces you to. That's not laziness. That's pragmatism.
+## Transition to Chapter 3
 
-## Summary
+We now have well-designed classes. But how do we know they work correctly? How do we ensure that when we refactor (and we will), we don't break existing behavior?
 
-These five principles work together. They're not separate rules you apply in isolation. They're different angles on the same idea: write code that's easy to change.
+We need tests.
 
-Single Responsibility gives you clear boundaries. Open/Closed lets you extend without breaking. Liskov Substitution keeps your polymorphism reliable. Interface Segregation keeps your dependencies focused. Dependency Inversion protects your core logic from technical detail.
+In Chapter 3, we'll learn Test-Driven Development. We'll write tests for our `Member`, `FitnessClass`, and `Booking` classes. We'll discover that having followed SOLID principles makes our code much easier to test. We'll test-drive a new feature (premium waitlist) from scratch. And we'll build the safety net that lets us refactor with confidence.
 
-You won't apply all of them all the time. Sometimes a simple if-else chain is exactly what you need. Sometimes a single class that does multiple things is the pragmatic choice for a feature that's unlikely to change. These principles are tools, not laws.
+**The challenge:** "We need to be confident our business rules work before deploying to production. How do we test this code without running the entire CLI?"
 
-Use them when complexity appears. When change becomes painful. When you find yourself modifying the same class for different reasons. That's when SOLID thinking helps.
-
-We've worked with isolated examples here. Simple classes. Focused demonstrations. The gym booking system exists in fragments: a `Member` class here, a `BookingService` there, pricing strategies scattered across examples.
-
-We've learned to write focused classes with clear dependencies. Each class has a single responsibility. We can extend behavior without modifying existing code. Our abstractions let us swap implementations. But as our system grows, even well-designed classes need organization. Where does `Member` live? Where does `BookingService` go? How do we keep database code separate from business logic? When you have thirty classes following SOLID principles, you still need to answer: how do they fit together?
-
-That's where layers come in. In the next chapter, we'll bring structure to this scattered collection of classes. We'll talk about layers—how to organize a codebase so that these principles have room to breathe. How to separate concerns at a system level, not just a class level. SOLID taught us to write good classes. Layers will teach us how to organize them.
-
-For now, you've learned to think about responsibilities, extension points, substitution, focused interfaces, and inverted dependencies. That's the foundation. Everything else builds on this.
+That's next.
