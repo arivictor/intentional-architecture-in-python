@@ -77,3 +77,25 @@ This book is licensed under [CC BY-NC-ND 4.0](https://creativecommons.org/licens
 You are free to share this work for non-commercial purposes with attribution. You may not create derivative works or use this material commercially without permission.
 
 See [LICENSE](LICENSE) for full terms.
+
+
+---
+
+* Chapter 0 - DONE
+* Chapter 1 - DONE
+* Chapter 2 - PENDING
+* Chapter 3 - PENDING
+* Chapter 4 - PENDING
+* Chapter 5 - PENDING
+* Chapter 6 - PENDING
+* Chapter 7 - PENDING
+* Chapter 8 - PENDING
+* Chapter 9 - PENDING
+* Chapter 10 - PENDING
+* Appendix A - PENDING
+* Appendix B - PENDING
+* Appendix C - PENDING
+* Appendix D - PENDING
+* Appendix E - PENDING
+* Appendix F - PENDING
+* Appendix Z (Glossary) - PENDING
