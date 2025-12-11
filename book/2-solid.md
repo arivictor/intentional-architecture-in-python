@@ -2,13 +2,13 @@
 
 Philosophy only takes you so far. Architecture isn't built on principles alone, it's built on decisions made when code demands them. Chapter 1 gave you the mindset. Now we're going to apply it.
 
-Our simple script is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. Mission accomplished.
+Our proof of concept application is working. Members can book classes. Classes track capacity. Bookings get confirmed and cancelled. Mission accomplished.
 
 Then requirements change.
 
-The gym wants to send email confirmations when members book classes. They want different pricing for premium vs. basic members. They want to validate email addresses. They want to persist data to a database instead of losing everything when the script ends.
+The gym wants to send email confirmations when members book classes. They want different pricing for premium vs. basic members. They want to validate email addresses. They want to persist data to a database instead of losing everything when the application closes. They also want to allow members to book and manage their own classes via a web interface.
 
-You could add all of this to the existing functions. Throw in some SMTP code here, database connections there, validation checks everywhere. It would work. But let's see what happens.
+You could add most of this to the existing functions. Throw in some SMTP code here, database connections there, validation checks everywhere. It would work. But let's see what happens.
 
 Here's `book_class()` with email notifications added:
 
@@ -62,15 +62,13 @@ This works. But notice what just happened:
 3. **It's fragile.** If the email server is down, bookings fail entirely.
 4. **It's hard to change.** Switching email providers means digging into booking logic.
 
-We've tangled two unrelated concerns: booking logic and email delivery. They change for different reasons, but now they're locked together. This is what happens when code starts to strain.
+We've tangled two unrelated concerns: booking logic and email delivery. They change for different reasons, but now they're locked together. This is what happens when code starts to strain. This is the signal. The code is asking for better structure. 
 
-The simple script was fine when it was simple. Now it's not.
-
-This is the signal. The code is asking for better structure. It's asking for SOLID.
+It's asking for SOLID.
 
 **SOLID is an acronym.** Five principles that guide how you write classes and structure code: Single Responsibility, Open/Closed, Liskov Substitution, Interface Segregation, Dependency Inversion.
 
-These aren't theoretical rules. They're patterns that emerged from watching what makes code rigid and what makes it flexible. They give you a vocabulary for recognizing problems and reasoning about solutions.
+These aren't theoretical rules. They're patterns that emerged from watching what makes code rigid and what makes it flexible. They give you a vocabulary for recognising problems and reasoning about solutions.
 
 Let's work through each one. Not as abstract theory, but as solutions to the actual pain points we're now experiencing with our script.
 

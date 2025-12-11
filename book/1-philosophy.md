@@ -517,10 +517,10 @@ if __name__ == "__main__":
     main()
 ```
 
-This code works. You can understand it in a few minutes. It handles members, classes, and bookings. It validates capacity and credits. For a proof of concept, it's exactly what they needed at the time.
+This application works. It's easy to understand it in a few minutes. It handles members, classes, and bookings. It validates capacity and credits. For a proof of concept, it's exactly what they needed at the time.
 
-But it has problems. You might not see them yet, they're hidden by simplicity. As requirements grow, this structure will strain. We'll discover the problems together, and we'll fix them using architectural patterns. Not because patterns are "correct," but because the code will demand them.
+But it has problems. As requirements grow, this structure will strain. It's also not reliable, maintainable, or testable. We'll discover the problems together, and we'll fix them using architectural patterns. Not because patterns are "correct," but because the code will demand them.
 
-**This is where we start.** A working proof of concept. Ready to evolve.
+**This is where we start.**
 
 In the next chapter, we'll add a new requirement. The script will start to break down. And we'll see our first architectural principle emerge, not from theory, but from necessity.
