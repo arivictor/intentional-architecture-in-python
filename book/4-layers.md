@@ -1,8 +1,46 @@
 # Chapter 4: Layers & Clean Architecture
 
-We've learned TDD in Chapter 3. We write tests first, which drives our design decisions. We've applied SOLID principles from Chapter 2. Our code is now organized into focused classes with clear responsibilities. `Member`, `FitnessClass`, and `Booking` handle domain concepts. `EmailService` handles notifications. `PricingService` calculates prices. Each class has one reason to change.
+We've made significant progress. In Chapter 2, we applied SOLID principles to create well-designed classes. In Chapter 3, we added Test-Driven Development to build confidence through automated testing.
 
-The code is better. We have tests that let us refactor safely. But it's still all in one file.
+Our code is better. We have tests that let us refactor safely. Our domain classes are separated from the CLI. But there's still room for improvement.
+
+## Where We Left Off
+
+In Chapter 3, we reorganized our code to enable testing. Here's what we ended up with:
+
+**File structure:**
+```
+gym_booking/
+  ├── domain.py              # Member, FitnessClass, Booking classes
+  ├── pricing.py             # PricingStrategy implementations
+  ├── notifications.py       # NotificationService
+  ├── cli.py                # CLI interface with global dictionaries
+  └── tests/
+      ├── test_member.py
+      ├── test_fitness_class.py
+      └── test_waitlist.py   # 17 passing tests
+```
+
+**What we have:**
+- Domain classes with business logic and validation
+- Pricing strategies following Open/Closed Principle
+- Notification abstractions following Dependency Inversion
+- Comprehensive test suite (17 tests, runs in milliseconds)
+- CLI still manages global dictionaries for storage
+
+**What works:**
+- We can test business logic without running the CLI
+- Tests are fast (no database, no network calls)
+- Business rules are verified automatically
+- Adding new features is safer with test coverage
+
+**What's still a problem:**
+- Data stored in-memory dictionaries (lost when program ends)
+- All storage logic in CLI (mixed with interface code)
+- No clear separation between "booking logic" and "where bookings are stored"
+- Tests manipulate object attributes directly (`fitness_class.bookings.append(...)`)
+
+## The New Challenge
 
 Then new requirements arrive:
 
@@ -732,6 +770,94 @@ The test stays green. The design improves. **This is TDD driving architecture.**
 - The change was easy because tests gave us a safety net
 
 This is the power of combining TDD with architectural thinking. TDD tells you when code needs structure. Layers give you that structure. Together, they create maintainable systems.
+
+## What We Have Now
+
+Let's take stock of our progress. We've refactored our gym booking system into layers:
+
+**Our code now has:**
+1. **Four distinct layers:**
+   - Domain: `Member`, `FitnessClass`, `Booking` with business logic only
+   - Application: `BookingService` coordinating use cases
+   - Infrastructure: `MemberRepository`, `FitnessClassRepository`, `SqliteDatabase`
+   - Interface: `cli.py` handling user interaction
+
+2. **Clear separation of concerns:**
+   - Business rules don't know about databases
+   - Database code doesn't contain business logic
+   - CLI doesn't implement booking logic
+
+3. **Tests still work (and are better):**
+   - Domain tests don't need databases
+   - Can test business logic in isolation
+   - Infrastructure can be swapped without breaking domain tests
+
+4. **File structure:**
+   ```
+   gym_booking/
+     ├── domain/
+     │   ├── member.py
+     │   ├── fitness_class.py
+     │   └── booking.py
+     ├── application/
+     │   └── booking_service.py
+     ├── infrastructure/
+     │   ├── database.py
+     │   └── repositories.py
+     ├── interface/
+     │   └── cli.py
+     └── tests/
+         ├── test_member.py
+         ├── test_fitness_class.py
+         ├── test_waitlist.py
+         └── test_booking_service.py  # New
+   ```
+
+**What we gained:**
+- Can change from SQLite to PostgreSQL by modifying only `infrastructure/`
+- Can add REST API alongside CLI without touching domain
+- Domain layer is testable without infrastructure
+- Clear boundaries make finding code easier
+- Each layer can evolve independently
+
+**But we still have:**
+- Simple domain objects (classes are still data + basic methods)
+- Business logic spread between domain classes and application services
+- No rich domain concepts like Value Objects or Aggregates
+- Credits are just integers (no expiry, no validation)
+- Booking rules are procedural (not object-oriented)
+
+**Current state summary:**
+We have structure (layers) but our domain is still somewhat "anemic"—classes hold data with simple methods, while services do most of the work. This works, but there's room for improvement.
+
+## Transition to Chapter 5
+
+We have layers. Our code is organized. Tests prove it works. But look closely at our domain classes:
+
+```python
+class Member:
+    def __init__(self, member_id, name, email, membership_type, pricing_strategy):
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.credits = 20  # Just an integer
+    
+    def can_book(self):
+        return self.credits > 0  # Simple check
+    
+    def deduct_credit(self):
+        self.credits -= 1  # Just arithmetic
+```
+
+This `Member` class is mostly a data container. The interesting behavior—pricing, booking rules, validation—lives in services outside the domain.
+
+But what if credits could expire? What if members have join dates that affect loyalty status? What if email addresses need special validation rules? Do all these rules belong in services, or could the domain objects themselves be richer?
+
+In Chapter 5, we'll learn **Domain Modeling**. We'll discover Value Objects (like `Credits` that can expire), Entities (objects with identity and lifecycle), and Aggregates (clusters of objects treated as a unit). We'll move from an "anemic domain model" to a "rich domain model" where business rules live in the objects themselves, not in services.
+
+**The challenge:** "Credits should expire after 30 days. We need to track member join dates and calculate loyalty status. Where does this logic belong?"
+
+That's next.
 
 ## When to Relax the Rules
 
