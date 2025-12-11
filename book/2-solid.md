@@ -205,7 +205,318 @@ Our simple script is straining. The code is:
 - **Hard to understand:** Business rules are buried in if-statements
 - **Fragile:** Changing one function can break others
 
-This is the signal. The code is asking for better structure. It's asking for SOLID.
+This is the signal. The code is asking for better structure. But before we jump into design principles, we need to understand the journey from where we are to where we're going.
+
+## From Dictionaries to Classes: Understanding the Progression
+
+In Chapter 1, we used dictionaries to represent our domain concepts. Now we're about to introduce classes. But this isn't a single leap—it's a progression. Understanding each step helps you recognize where you are and what comes next.
+
+### The Three Stages of Domain Model Evolution
+
+**Stage 1: Dictionaries (Procedural)**
+- Data in dictionaries: `{'id': 'M001', 'name': 'Alice', 'credits': 20}`
+- Functions manipulate the data: `book_class(member_id, class_id)`
+- No type safety, no IDE autocomplete
+- Easy to make typos: `member['creditz']` silently creates a new key
+
+**Stage 2: Anemic Classes (Data Containers)**
+- Data in classes with just `__init__`: Simple data holders
+- Still functions to manipulate them
+- Type safety and IDE support improve
+- But behavior is still external to the data
+
+**Stage 3: Rich Classes (Object-Oriented)**
+- Data AND behavior together in classes
+- Methods encapsulate business logic
+- Objects protect their own invariants
+- True object-oriented design
+
+Let's walk through this progression with our `Member` example.
+
+### Stage 1: Where We Started (Dictionaries)
+
+From Chapter 1, we had this:
+
+```python
+members = {}
+
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    members[member_id] = {
+        'id': member_id,
+        'name': name,
+        'email': email,
+        'membership_type': membership_type,
+        'credits': 20 if membership_type == 'premium' else 10
+    }
+
+def book_class(member_id, class_id):
+    """Book a member into a class."""
+    member = members[member_id]
+    
+    # Business rule: check credits
+    if member['credits'] <= 0:
+        print("✗ Insufficient credits")
+        return
+    
+    # Deduct credit
+    member['credits'] -= 1
+```
+
+**Problems with this approach:**
+- **No type safety:** `member['creditz']` creates a new key instead of erroring
+- **No IDE support:** Your editor doesn't know what fields exist
+- **No validation:** Can create `{'credits': -100}` without complaint
+- **Scattered behavior:** Credit deduction logic is in `book_class()`, not with the member data
+- **Easy to bypass rules:** Code elsewhere can set `member['credits'] = 999` directly
+
+This works for prototypes, but breaks down as complexity grows.
+
+### Stage 2: Anemic Classes (Data Containers)
+
+The first step is to replace dictionaries with classes that hold data:
+
+```python
+class Member:
+    """A gym member - just data for now."""
+    
+    def __init__(self, member_id: str, name: str, email: str, membership_type: str):
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.credits = 20 if membership_type == 'premium' else 10
+```
+
+Now instead of dictionaries, we create `Member` objects:
+
+```python
+# Create members using the class
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    member = Member(member_id, name, email, membership_type)
+    members[member_id] = member  # Store Member object, not dict
+    print(f"✓ Created member: {name} ({membership_type})")
+
+# Access member data through attributes
+def book_class(member_id, class_id):
+    """Book a member into a class."""
+    member = members[member_id]  # Now a Member object
+    
+    if member.credits <= 0:  # Attribute access, not dict lookup
+        print("✗ Insufficient credits")
+        return
+    
+    member.credits -= 1  # Still manipulating from outside
+```
+
+**What improved:**
+- ✅ **Type safety:** `member.creditz` is an error, not a silent bug
+- ✅ **IDE support:** Your editor autocompletes `.name`, `.email`, `.credits`
+- ✅ **Clear structure:** Every member has the same fields
+- ✅ **Easier to read:** `member.credits` is clearer than `member['credits']`
+
+**What's still a problem:**
+- ❌ **No validation:** Can still create invalid members
+- ❌ **Behavior is external:** Credit deduction logic lives in functions, not in `Member`
+- ❌ **No encapsulation:** Can directly set `member.credits = -100` from anywhere
+- ❌ **Still procedural:** We're just using classes as fancy dictionaries
+
+This is called an **anemic domain model**. The class has data but no behavior. It's anemic because it's weak—it can't protect itself or do anything useful. All the logic lives in functions outside the class.
+
+**Anemic models aren't wrong—they're an improvement over dictionaries.** They give you type safety and better tooling. For simple CRUD applications, they might be enough. But when business logic grows, you need more.
+
+### Stage 3: Rich Classes (Object-Oriented)
+
+Now we add behavior to the class. Instead of functions manipulating member data from outside, the member manages itself:
+
+```python
+class Member:
+    """A gym member with validation and behavior."""
+    
+    def __init__(self, member_id: str, name: str, email: str, membership_type: str):
+        # Validation in the constructor
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        if membership_type not in ['basic', 'premium']:
+            raise ValueError(f"Invalid membership type: {membership_type}")
+        
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.credits = 20 if membership_type == 'premium' else 10
+    
+    def can_book(self) -> bool:
+        """Check if member has enough credits to book a class."""
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        """Deduct one credit, with validation."""
+        if self.credits <= 0:
+            raise ValueError("No credits remaining")
+        self.credits -= 1
+    
+    def add_credit(self):
+        """Add one credit (e.g., for cancellations)."""
+        self.credits += 1
+```
+
+Now the business logic lives IN the class:
+
+```python
+def create_member(member_id, name, email, membership_type):
+    """Register a new member."""
+    try:
+        member = Member(member_id, name, email, membership_type)
+        members[member_id] = member
+        print(f"✓ Created member: {name} ({membership_type})")
+    except ValueError as e:
+        print(f"✗ {e}")
+
+def book_class(member_id, class_id):
+    """Book a member into a class."""
+    member = members[member_id]
+    
+    # Ask the member if it can book (behavior in the class)
+    if not member.can_book():
+        print("✗ Insufficient credits")
+        return
+    
+    # Tell the member to deduct a credit (behavior in the class)
+    member.deduct_credit()
+    
+    # Rest of booking logic...
+```
+
+**What improved:**
+- ✅ **Validation on creation:** Can't create invalid members
+- ✅ **Behavior with data:** `deduct_credit()` lives where it belongs
+- ✅ **Self-protection:** Member enforces its own rules
+- ✅ **Encapsulation:** Credit logic is in one place, not scattered
+- ✅ **Expressive code:** `member.can_book()` reads like English
+
+This is a **rich domain model**. The class understands what a member is and what a member can do. It has both data and behavior. It enforces its own rules. It's a true object.
+
+### Anemic vs Rich: A Quick Comparison
+
+| Aspect | Dictionaries | Anemic Classes | Rich Classes |
+|--------|-------------|----------------|--------------|
+| **Type safety** | ❌ No | ✅ Yes | ✅ Yes |
+| **IDE support** | ❌ No | ✅ Yes | ✅ Yes |
+| **Validation** | ❌ No | ❌ No | ✅ Yes |
+| **Behavior location** | In functions | In functions | In class methods |
+| **Encapsulation** | ❌ None | ❌ Weak | ✅ Strong |
+| **Business logic** | Scattered | Scattered | Centralized |
+| **When to use** | Quick prototypes | Simple CRUD | Complex business rules |
+
+### Why This Progression Matters
+
+You don't always need to go all the way to rich classes. The right choice depends on your needs:
+
+**Stay with dictionaries when:**
+- You're prototyping and want maximum flexibility
+- The data structure is temporary or ad-hoc
+- You're parsing JSON/YAML and just passing it along
+- The "object" is really just a data bag with no behavior
+
+**Use anemic classes when:**
+- You want type safety and IDE support
+- You're building a simple CRUD application
+- Business rules are minimal (just basic validation)
+- The class is truly just a data transfer object
+
+**Use rich classes when:**
+- Business logic is complex and growing
+- Rules need to be enforced consistently
+- You want the code to read like the business domain
+- You need encapsulation to prevent invalid states
+- You're building a system that will live for years
+
+For our gym booking system, we're moving to rich classes because we have real business rules: credit management, capacity checks, booking validation. These rules deserve to live in the domain objects themselves.
+
+### The Member Class: Progressive Enrichment
+
+Let's see the complete progression of our `Member` class through all three stages:
+
+**Stage 1: Dictionary (from Chapter 1)**
+```python
+member = {
+    'id': 'M001',
+    'name': 'Alice',
+    'email': 'alice@example.com',
+    'membership_type': 'premium',
+    'credits': 20
+}
+
+# Functions operate on the data
+def deduct_credit(member):
+    if member['credits'] > 0:
+        member['credits'] -= 1
+```
+
+**Stage 2: Anemic Class (data container)**
+```python
+class Member:
+    def __init__(self, member_id: str, name: str, email: str, membership_type: str):
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.credits = 20 if membership_type == 'premium' else 10
+
+# Functions still operate on the data
+def deduct_credit(member: Member):
+    if member.credits > 0:
+        member.credits -= 1
+```
+
+**Stage 3: Rich Class (data + behavior)**
+```python
+class Member:
+    def __init__(self, member_id: str, name: str, email: str, membership_type: str):
+        # Validation on construction
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        if membership_type not in ['basic', 'premium']:
+            raise ValueError(f"Invalid membership type: {membership_type}")
+        
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.credits = 20 if membership_type == 'premium' else 10
+    
+    def can_book(self) -> bool:
+        """Business rule: members need credits to book."""
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        """Business logic: controlled credit deduction."""
+        if not self.can_book():
+            raise ValueError("No credits remaining")
+        self.credits -= 1
+
+# No external function needed - the class does it
+member = Member("M001", "Alice", "alice@example.com", "premium")
+member.deduct_credit()  # The object manages itself
+```
+
+Each stage builds on the previous. Dictionaries → anemic classes adds type safety. Anemic → rich adds business logic and protection.
+
+### Moving Forward
+
+Now that we understand this progression, the rest of this chapter will show you how SOLID principles guide you toward rich, well-designed classes. But remember:
+
+- **SOLID applies to classes**, not dictionaries
+- **Rich models benefit most** from SOLID
+- **Anemic models are a stepping stone**, not a destination
+
+The principles we're about to learn (Single Responsibility, Open/Closed, etc.) make the most sense in the context of rich domain models. They help you organize behavior, not just data.
+
+Let's dive into SOLID.
 
 ## What Is SOLID?
 
@@ -229,40 +540,33 @@ The confusion comes from the word "responsibility." It doesn't mean "do one thin
 
 A responsibility is a stakeholder or concern that might request a change. If two different people, for two different reasons, might ask you to modify the same class, that class has multiple responsibilities.
 
-### Refactoring Step 1: Extract `Member` Class
+Now that we understand the progression from dictionaries to anemic to rich models, we can apply SOLID principles to build our classes properly. SRP helps us decide what belongs in each class.
 
-Our `create_member()` function mixes validation with data creation. Let's separate these concerns.
+### Building a Rich `Member` Class with SRP
 
-**Why use a class here?**
+We've already seen three versions of `Member`:
+1. Dictionary (Chapter 1)
+2. Anemic class (earlier in this chapter)  
+3. Rich class with validation and behavior (earlier in this chapter)
 
-We could just split `create_member()` into smaller functions like `validate_email()` and `validate_membership_type()`. But a class gives us something more valuable: **data and behavior together**. Its a 1-to-1 mapping of a real-world concept (a gym member) to code.
+Now let's build it properly with Single Responsibility Principle in mind. The `Member` class should have ONE responsibility: **represent what a gym member is and what they can do**.
 
-Whenever we have a member, we need:
+This means `Member` handles:
+- Member data (name, email, credits, membership type)
+- Member validation (email format, membership type validity)
+- Member behavior (booking, credit management)
 
-- The member's data (name, email, credits)
-- Validation rules for that data
-- The guarantee that invalid members can't exist
+This means `Member` does NOT handle:
+- Duplicate checking (that's a storage concern)
+- Creating new member IDs (that's ID generation)
+- Saving to database (that's persistence)
+- Sending welcome emails (that's notifications)
 
-A class packages all of this into one cohesive unit. The `Member` class becomes the single source of truth for:
-
-1. What fields a member has
-2. What values are valid
-3. How a member is initialized
-
-This means:
-
-- **No orphaned data**: You can't accidentally create a member dict with `creditz` instead of `credits`
-- **No validation bypass**: You can't create an invalid member because validation happens in `__init__`
-- **Clear contract**: Any code that has a `Member` object knows exactly what it contains
-- **Better IDE support**: Your editor can autocomplete `.name`, `.email`, etc.
-
-We're not just tidying upm we're creating a defensive boundary around member data.
-
-Let's create a `Member` class that validates itself:
+Let's create a proper rich `Member` class:
 
 ```python
 class Member:
-    """Represents a gym member with validation."""
+    """Represents a gym member with validation and behavior (rich model)."""
     
     def __init__(self, member_id, name, email, membership_type):
         # Validation happens in the constructor
@@ -272,28 +576,50 @@ class Member:
         if membership_type not in ['basic', 'premium']:
             raise ValueError(f"Invalid membership type: {membership_type}")
         
+        # Member data
         self.id = member_id
         self.name = name
         self.email = email
         self.membership_type = membership_type
         self.credits = 20 if membership_type == 'premium' else 10
     
+    def can_book(self) -> bool:
+        """Check if member has enough credits to book a class."""
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        """Deduct one credit when booking a class."""
+        if not self.can_book():
+            raise ValueError(f"Member {self.name} has no credits remaining")
+        self.credits -= 1
+    
+    def add_credit(self):
+        """Add one credit (e.g., when cancelling a booking)."""
+        self.credits += 1
+    
     def __repr__(self):
-        return f"Member({self.name}, {self.email}, {self.membership_type})"
+        return f"Member({self.name}, {self.email}, {self.membership_type}, {self.credits} credits)"
 ```
+
+**This is a rich model because:**
+- ✅ Validates data on construction (`__init__` checks email and membership type)
+- ✅ Encapsulates behavior (`can_book()`, `deduct_credit()`, `add_credit()`)
+- ✅ Protects invariants (can't deduct credits if none available)
+- ✅ Expresses business concepts (members have credits, can book classes)
 
 Now our `create_member()` function becomes simpler:
 
 ```python
 def create_member(member_id, name, email, membership_type):
     """Register a new member."""
-    # Check for duplicates
+    # Check for duplicates (storage concern, not Member's job)
     for existing_member in members.values():
         if existing_member.email == email:
             print("✗ Email already registered")
             return
     
     try:
+        # Member validates itself on construction
         member = Member(member_id, name, email, membership_type)
         members[member_id] = member  # Store Member object, not dict
         print(f"✓ Created member: {name} ({membership_type})")
@@ -301,26 +627,37 @@ def create_member(member_id, name, email, membership_type):
         print(f"✗ {e}")
 ```
 
-**What changed?**
-- `Member` class handles member data and validation
-- `create_member()` function handles duplicate checking and storage
-- If email validation rules change, we only modify `Member`
-- If storage logic changes, we only modify `create_member()`
+**What changed from the anemic version?**
+- `Member` now has **behavior** (`can_book()`, `deduct_credit()`, `add_credit()`)
+- The class is **self-protecting** (can't deduct when credits are zero)
+- Business logic **lives in the class**, not scattered in functions
+- `create_member()` is **simpler**—it just handles duplicate checks and storage
 
-One responsibility per component. This is SRP in action.
+**Single Responsibility achieved:**
+- `Member` class: Represents member data and behavior
+- `create_member()` function: Handles duplicate checking and storage
+- If member business rules change → modify `Member`
+- If storage logic changes → modify `create_member()`
 
-### Refactoring Step 2: Extract `FitnessClass` Class
+This is SRP in action: one class, one responsibility.
 
-Let's do the same for fitness classes:
+### Building a Rich `FitnessClass` with SRP
+
+Let's do the same for fitness classes—create a rich model with behavior:
 
 ```python
 class FitnessClass:
-    """Represents a fitness class."""
+    """Represents a fitness class with validation and behavior (rich model)."""
     
     def __init__(self, class_id, name, capacity, day, start_time):
+        # Validation
         if capacity <= 0:
             raise ValueError("Capacity must be positive")
         
+        if not name or not name.strip():
+            raise ValueError("Class name cannot be empty")
+        
+        # Class data
         self.id = class_id
         self.name = name
         self.capacity = capacity
@@ -328,17 +665,44 @@ class FitnessClass:
         self.start_time = start_time
         self.bookings = []  # List of member IDs
     
-    def spots_available(self):
+    def spots_available(self) -> int:
         """Calculate available spots."""
         return self.capacity - len(self.bookings)
     
-    def is_full(self):
+    def is_full(self) -> bool:
         """Check if class is full."""
         return self.spots_available() <= 0
     
+    def can_accept_booking(self) -> bool:
+        """Check if class can accept new bookings."""
+        return not self.is_full()
+    
+    def add_booking(self, member_id: str):
+        """Add a member to this class."""
+        if self.is_full():
+            raise ValueError(f"Class {self.name} is at capacity")
+        
+        if member_id in self.bookings:
+            raise ValueError(f"Member already booked in this class")
+        
+        self.bookings.append(member_id)
+    
+    def remove_booking(self, member_id: str):
+        """Remove a member from this class."""
+        if member_id not in self.bookings:
+            raise ValueError(f"Member not found in class {self.name}")
+        
+        self.bookings.remove(member_id)
+    
     def __repr__(self):
-        return f"FitnessClass({self.name}, {self.day} {self.start_time})"
+        return f"FitnessClass({self.name}, {self.day} {self.start_time}, {len(self.bookings)}/{self.capacity})"
 ```
+
+**This is a rich model because:**
+- ✅ Validates data on construction (capacity, name)
+- ✅ Encapsulates behavior (`add_booking()`, `remove_booking()`, `can_accept_booking()`)
+- ✅ Protects invariants (can't exceed capacity, can't double-book)
+- ✅ Expresses business concepts (classes have capacity, accept bookings)
 
 Now `create_class()` becomes:
 
@@ -376,7 +740,7 @@ class Booking:
         return f"Booking({self.id}, status={self.status})"
 ```
 
-Now `book_class()` uses our classes:
+Now `book_class()` uses our **rich models**:
 
 ```python
 def book_class(member_id, class_id):
@@ -391,37 +755,52 @@ def book_class(member_id, class_id):
     member = members[member_id]  # Now a Member object
     fitness_class = classes[class_id]  # Now a FitnessClass object
     
-    # Business rules
-    if fitness_class.is_full():
-        print("✗ Class is full")
-        return
-    if member.credits <= 0:
+    # Ask the objects about their state (using their methods)
+    if not member.can_book():
         print("✗ Insufficient credits")
         return
     
-    # Create booking
-    booking_id = uuid.uuid4().hex
-    booking = Booking(booking_id, member_id, class_id)
-    bookings[booking_id] = booking
-    
-    # Update state
-    member.credits -= 1
-    fitness_class.bookings.append(member_id)
-    
-    print(f"✓ Booked {member.name} into {fitness_class.name}")
-    print(f"  Booking ID: {booking_id}")
-    print(f"  Credits remaining: {member.credits}")
+    # Business rules checked by the domain objects
+    try:
+        # Let the class validate and add the booking
+        fitness_class.add_booking(member_id)
+        
+        # Let the member handle credit deduction
+        member.deduct_credit()
+        
+        # Create the booking record
+        booking_id = uuid.uuid4().hex
+        booking = Booking(booking_id, member_id, class_id)
+        bookings[booking_id] = booking
+        
+        print(f"✓ Booked {member.name} into {fitness_class.name}")
+        print(f"  Booking ID: {booking_id}")
+        print(f"  Credits remaining: {member.credits}")
+        
+    except ValueError as e:
+        print(f"✗ {e}")
 ```
 
-**Progress check:**
-- We still have dictionaries (`members`, `classes`, `bookings`)
-- We still have functions (`create_member`, `book_class`, etc.)
-- We still have the command loop in `main()`
-- But now we have **classes with behavior** instead of raw dictionaries
-- Validation is encapsulated
-- Business logic is clearer
+**Notice the difference from the anemic version:**
+- **Anemic**: `if member.credits <= 0:` (checking primitive values)
+- **Rich**: `if not member.can_book():` (asking the object about its capability)
 
-This is incremental refactoring. We haven't changed everything. We've made it better, step by step.
+- **Anemic**: `member.credits -= 1` (directly manipulating data)
+- **Rich**: `member.deduct_credit()` (telling the object to perform behavior)
+
+- **Anemic**: `if len(fitness_class.bookings) >= fitness_class.capacity:` (manual checking)
+- **Rich**: `fitness_class.add_booking(member_id)` (object enforces its own rules)
+
+**Progress check:**
+- We still have dictionaries (`members`, `classes`, `bookings`) for storage
+- We still have functions (`create_member`, `book_class`, etc.) for workflow
+- We still have the command loop in `main()`
+- But now we have **rich domain models** with behavior, not just data containers
+- Validation is encapsulated in the classes
+- Business logic lives where it belongs (in domain objects)
+- The objects protect themselves from invalid states
+
+This is incremental refactoring. We haven't changed everything. We've made it better, step by step. The progression from dictionaries → anemic classes → rich classes is complete for our core domain objects.
 
 ## Open/Closed Principle
 
