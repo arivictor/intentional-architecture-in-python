@@ -1,38 +1,51 @@
 # Chapter 9: Putting It All Together
 
-You've learned the pieces. TDD guides your design. SOLID shapes your classes. Layers organize your codebase. Domain models enforce business rules. Use cases orchestrate workflows. Ports and adapters decouple infrastructure.
+You've learned the pieces individually. In Chapter 2, SOLID shaped your classes. Chapter 3 introduced TDD. Chapter 4 organized layers. Chapter 5 built rich domains. Chapter 6 formalized use cases. Chapter 7 achieved hexagonal architecture. Chapter 8 added multiple interfaces.
 
-Now we build something complete.
+Now we build something complete using all of them.
 
-This chapter shows how all these patterns work together by building a real feature from start to finish: **premium members get waitlist priority.**
+## Where We Left Off
 
-We'll follow the full workflow:
-1. Start with a user story
-2. Drive design with tests (TDD)
-3. Model the domain (entities, value objects)
-4. Apply SOLID principles
-5. Respect layer boundaries
-6. Orchestrate with use cases
-7. Implement infrastructure with ports and adapters
-8. Verify with comprehensive testing
+In Chapter 8, we completed the full architecture stack:
 
-By the end, you'll see how architecture emerges from intentional decisions, not from following templates.
+**Complete System:**
+- ✅ Domain: Rich entities and value objects
+- ✅ Application: Use cases with Command/Result pattern  
+- ✅ Infrastructure: Ports and adapters (SQLite, InMemory, SMTP)
+- ✅ Interface: Multiple interfaces (REST API + CLI)
 
-## The User Story
+**What works:**
+- Users can book classes via API or CLI
+- Tests run fast with InMemory adapters
+- Can swap infrastructure without touching core
+- Business rules enforced in domain
 
-**As a premium member, I want priority access to waitlisted classes so that I can attend popular sessions even when they're full.**
+**But:** We've built features incrementally, adding to existing code. We haven't shown the **complete workflow** of building a brand new feature from scratch using all the patterns together.
 
-Business rules:
+## The Challenge
+
+Let's build a real feature from start to finish, applying everything we've learned:
+
+**User Story:** "As a premium member, I want priority access to waitlisted classes so that I can attend popular sessions even when they're full."
+
+**Business Rules:**
 - When a class is full, premium members can join a waitlist
 - When a spot opens up (cancellation), the first premium member on the waitlist is automatically booked
 - Basic members cannot join waitlists—they get a "class full" error
 - Waitlist members are notified when they're promoted to confirmed
 
-This feature touches everything: domain logic, persistence, orchestration, and external communication.
+This feature will touch everything:
+- **Domain:** Model waitlist priority rules
+- **Application:** Orchestrate promotion logic
+- **Infrastructure:** Persist waitlist state
+- **Interface:** Expose via both API and CLI
+- **Testing:** TDD-driven from start
+
+This chapter shows how all the patterns work together in practice.
 
 ## Breaking Down the Feature
 
-Before we write any code, let's think through what we're building. This is where architecture decisions happen—not in templates, but in understanding the problem.
+Before we write any code, let's think through what we're building. This is where architecture decisions happen.
 
 ### What are the key scenarios?
 

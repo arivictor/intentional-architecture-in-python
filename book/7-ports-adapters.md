@@ -1,8 +1,60 @@
 # Chapter 7: Ports & Adapters (Hexagonal Architecture)
 
-We have use cases from Chapter 6. `BookClassUseCase` orchestrates the booking workflow. `CancelBookingUseCase` handles cancellations and refunds. They're clean. They're focused. They work.
+We have use cases from Chapter 6. `BookClassUseCase` orchestrates the booking workflow. The Command/Result pattern gives us clear contracts. Transaction boundaries are explicit. The application layer is clean and focused.
 
-But try to test them.
+But we have a critical problem that we identified at the end of Chapter 6.
+
+## Where We Left Off
+
+In Chapter 6, we built formalized use cases with clear structure:
+
+```python
+# application/use_cases/book_class_use_case.py
+class BookClassUseCase:
+    def __init__(self, member_repository, class_repository, 
+                 booking_repository, notification_service):
+        self.member_repository = member_repository
+        self.class_repository = class_repository
+        self.booking_repository = booking_repository
+        self.notification_service = notification_service
+    
+    def execute(self, command: BookClassCommand) -> BookingResult:
+        # Load entities
+        member = self.member_repository.get_by_id(command.member_id)
+        fitness_class = self.class_repository.get_by_id(command.class_id)
+        
+        # Orchestrate domain logic
+        member.deduct_credit()
+        fitness_class.add_booking(command.member_id)
+        booking = Booking(generate_id(), command.member_id, command.class_id)
+        
+        # Save changes
+        self.member_repository.save(member)
+        self.class_repository.save(fitness_class)
+        self.booking_repository.save(booking)
+        
+        # Notify
+        self.notification_service.send_confirmation(member, fitness_class)
+        
+        return BookingResult(success=True, booking_id=booking.id)
+```
+
+**What works:**
+- Clear orchestration logic
+- Separated from domain business rules
+- Structured Commands and Results
+- Testable workflows
+
+**The problem we identified:**
+Use cases depend on **concrete implementations**:
+- `SqliteMemberRepository` (specific database)
+- `SMTPNotificationService` (specific email provider)
+
+This creates cascading issues.
+
+## The New Challenge (From Chapter 6)
+
+Try to test this use case:
 
 ```python
 def test_booking_deducts_credit():
@@ -3216,6 +3268,103 @@ This is hexagonal architecture fully realised. This is ports and adapters in pra
 Your codebase is organised. Your domain is pure. Your application is decoupled from infrastructure. Your tests are fast and focused.
 
 The architecture serves the business logic. Not the other way around.
+
+## What We Have Now
+
+Let's take stock. We've achieved complete hexagonal architecture:
+
+**Our system now has:**
+1. **Ports (abstractions) defining contracts:**
+   - `MemberRepository` (port)
+   - `FitnessClassRepository` (port)
+   - `BookingRepository` (port)
+   - `NotificationService` (port)
+
+2. **Multiple adapters for each port:**
+   - `InMemoryMemberRepository`, `SqliteMemberRepository` (adapters)
+   - `ConsoleNotificationService`, `SMTPNotificationService` (adapters)
+   - Can add `PostgresMemberRepository` without touching use cases
+
+3. **Dependency inversion achieved:**
+   - Use cases depend on ports (abstractions)
+   - Adapters implement ports (concrete infrastructure)
+   - Dependencies point inward toward domain
+
+4. **Complete testability:**
+   - Tests use `InMemoryRepository` adapters (fast, no setup)
+   - Production uses `SqliteRepository` adapters
+   - Same use cases, different infrastructure
+
+**Updated structure:**
+```
+gym_booking/
+  ├── domain/
+  │   ├── entities/...
+  │   └── value_objects/...
+  ├── application/
+  │   ├── ports/
+  │   │   ├── member_repository.py      # Port (interface)
+  │   │   ├── class_repository.py       # Port (interface)
+  │   │   └── notification_service.py   # Port (interface)
+  │   └── use_cases/
+  │       └── book_class_use_case.py    # Depends on ports!
+  ├── infrastructure/
+  │   ├── adapters/
+  │   │   ├── sqlite_member_repository.py    # Adapter
+  │   │   ├── inmemory_member_repository.py  # Adapter
+  │   │   └── smtp_notification_service.py   # Adapter
+  │   └── container.py  # Dependency injection
+  ├── interface/
+  │   └── cli.py  # Still using old CLI
+  └── tests/
+      └── test_book_class_use_case.py  # Uses InMemory adapters!
+```
+
+**What we gained:**
+- Can swap SQLite → PostgreSQL by changing one line in container
+- Tests run in milliseconds (no database)
+- Use cases are pure orchestration (no infrastructure knowledge)
+- New adapters don't affect existing code
+- True dependency inversion achieved
+
+**But we still have:**
+- Old CLI interface from Chapter 1 (still works but not updated)
+- Only one interface (command-line)
+- Interface layer not leveraging hexagonal architecture
+
+**Current state:**
+We have a beautiful hexagonal core (domain + application + adapters), but we're still using the simple CLI from early chapters. The CLI talks directly to use cases, which is fine, but we haven't demonstrated the full power of having multiple interfaces.
+
+## Transition to Chapter 8
+
+Our hexagonal architecture is complete. The core is clean. Adapters are swappable. Tests are fast. But look at our interface layer—we're still using the simple CLI from Chapter 1:
+
+```python
+# interface/cli.py
+def main():
+    while True:
+        command = input("> ").strip().split()
+        if command[0] == "book":
+            # Direct instantiation, mixed with UI logic
+            member_id = command[1]
+            class_id = command[2]
+            # ...
+```
+
+This works, but it doesn't showcase what hexagonal architecture enables: **multiple interfaces using the same core.**
+
+The power of hexagonal architecture isn't just testability—it's that the core is independent of how it's accessed. Want a CLI? Build one. Want a REST API? Build one. Want a GraphQL endpoint? Build one. Want all three? They all use the same use cases.
+
+In Chapter 8, we'll build a proper **Interface Layer**. We'll:
+- Clean up the CLI interface (make it a proper adapter)
+- Build a REST API interface (Flask-based)
+- Show both interfaces using the same use cases
+- Demonstrate how HTTP concerns stay in the interface layer
+- Prove that the core is truly independent
+
+**The challenge:** "We need a REST API so our mobile app can access the booking system. The CLI should still work. How do we add this without duplicating business logic?"
+
+That's next.
 
 ## Chapter Summary
 

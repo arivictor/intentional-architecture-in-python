@@ -1,847 +1,742 @@
 # Chapter 3: Test-Driven Development
 
-The SOLID principles from Chapter 2 gave you tools to write flexible code. But they don't tell you when to apply them. They don't guide the design process itself. They're reactive—you use them when code starts to hurt.
+SOLID principles from Chapter 2 gave us well-designed classes. `Member`, `FitnessClass`, and `Booking` now encapsulate their own validation and behavior. We have pricing strategies. We have notification abstractions. The code is more maintainable.
 
-Test-Driven Development (TDD) is proactive. It shapes your design from the first line of code.
+But how do we know it works? How do we verify that our business rules are correct? How do we ensure that when we refactor—and we will—we don't break existing behavior?
 
-TDD isn't just about testing. It's a design discipline. When you write tests first, you're forced to think about how your code will be used before you write it. You define the interface before the implementation. You discover design problems early, when they're cheap to fix.
+We need tests. And more importantly, we need a way to design with tests.
 
-This chapter introduces TDD as the foundation for everything that follows. The layers, the domain modeling, the ports and adapters, all of these patterns emerge more naturally when you start with tests.
+## Where We Left Off
 
-## Why TDD Before Architecture?
-
-Architecture is about managing change. TDD is about enabling change.
-
-When you write tests first, you build a safety net. Every test is a specification. Every test is documentation. Every test is executable proof that your code works as intended. This safety net lets you refactor confidently. You can change implementation details knowing that if you break something, the tests will tell you.
-
-Without tests, refactoring is terrifying. You make a change, deploy it, and hope nothing breaks. With tests, refactoring is mechanical. You make a change, run the tests, and know immediately if you broke something.
-
-This is why TDD comes before architectural patterns. The patterns we'll learn in later chapters—layers, domain models, ports and adapters—all require refactoring to implement. You can't refactor safely without tests. You can't implement good architecture without the ability to refactor.
-
-TDD enables architecture.
-
-## The Red-Green-Refactor Cycle
-
-TDD follows a simple rhythm: Red, Green, Refactor.
-
-**Red:** Write a failing test. The test describes what you want the code to do. It fails because the code doesn't exist yet.
-
-**Green:** Write the simplest code that makes the test pass. Don't worry about elegance or architecture. Just make it work.
-
-**Refactor:** Improve the code while keeping the tests green. Remove duplication. Apply SOLID principles. Introduce patterns as needed.
-
-Then repeat. Each cycle is small, a few minutes at most. Each cycle adds a new behavior or improves the design. Over time, a well-tested, well-designed system emerges.
-
-Let's see this in practice with our gym booking system.
-
-## From User Stories to Tests
-
-Before we dive into code, let's address a critical question: **How do you know what tests to write?**
-
-Many developers struggle with TDD because they don't know where to start. They understand Red-Green-Refactor, but they don't understand how to break down a feature into testable scenarios.
-
-Here's the process:
-
-### Step 1: Start with the User Story or Business Rule
-
-Every feature comes from somewhere: a user story, a business requirement, a bug report. For example:
-
-> "As a gym member, I want to book fitness classes so that I can attend sessions."
-
-This is too vague to test directly. We need to break it down.
-
-### Step 2: Identify the Scenarios
-
-Ask: "What are the different paths through this feature?"
-
-For booking a class:
-- **Happy path:** Member with credits books a class with available space → Success
-- **No credits:** Member with zero credits tries to book → Error
-- **Class full:** Member tries to book a full class → Error
-- **Already booked:** Member tries to book the same class twice → Error
-
-Each scenario represents a different behavior, and each behavior needs a test.
-
-### Step 3: Pick the Simplest Scenario
-
-Don't try to build everything at once. Pick the scenario that delivers the most value with the least complexity. Usually that's the happy path.
-
-For our booking feature, we start with: "Member with credits books a class with available space."
-
-### Step 4: Write a Test That Describes the Behavior
-
-The test should read like a specification:
+In Chapter 2, we refactored our gym booking system to follow SOLID principles. Here's what we ended up with:
 
 ```python
-def test_member_books_class_successfully():
-    # Given: A member with credits and a class with space
-    member = Member(credits=10)
-    fitness_class = FitnessClass(capacity=20)
+# gym_booking.py (still one file, ~400 lines)
+from datetime import datetime
+from abc import ABC, abstractmethod
+import uuid
+
+# Domain Classes
+class Member:
+    """Represents a gym member with validation."""
     
-    # When: The member books the class
-    booking = book_class(member, fitness_class)
+    def __init__(self, member_id, name, email, membership_type, pricing_strategy):
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.pricing_strategy = pricing_strategy
+        self.credits = 20 if membership_type == 'premium' else 10
     
-    # Then: The booking is confirmed and credits are deducted
-    assert booking.status == "confirmed"
-    assert member.credits == 9
+    def can_book(self):
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        if self.credits > 0:
+            self.credits -= 1
+    
+    def get_class_price(self):
+        return self.pricing_strategy.calculate_price()
+
+
+class FitnessClass:
+    """Represents a fitness class."""
+    
+    def __init__(self, class_id, name, capacity, day, start_time):
+        if capacity <= 0:
+            raise ValueError("Capacity must be positive")
+        
+        self.id = class_id
+        self.name = name
+        self.capacity = capacity
+        self.day = day
+        self.start_time = start_time
+        self.bookings = []
+    
+    def spots_available(self):
+        return self.capacity - len(self.bookings)
+    
+    def is_full(self):
+        return self.spots_available() <= 0
+
+
+class Booking:
+    """Represents a class booking."""
+    
+    def __init__(self, booking_id, member_id, class_id):
+        self.id = booking_id
+        self.member_id = member_id
+        self.class_id = class_id
+        self.status = 'confirmed'
+        self.booked_at = datetime.now()
+    
+    def cancel(self):
+        self.status = 'cancelled'
+
+
+# Pricing Strategies
+class PricingStrategy(ABC):
+    @abstractmethod
+    def calculate_price(self) -> float:
+        pass
+
+class PremiumPricing(PricingStrategy):
+    def calculate_price(self) -> float:
+        return 0.0
+
+class BasicPricing(PricingStrategy):
+    def calculate_price(self) -> float:
+        return 10.0
+
+class StudentPricing(PricingStrategy):
+    def calculate_price(self) -> float:
+        return 5.0
+
+
+# Notification Service
+class NotificationService(ABC):
+    @abstractmethod
+    def send_booking_confirmation(self, member, fitness_class):
+        pass
+
+class EmailNotificationService(NotificationService):
+    def send_booking_confirmation(self, member, fitness_class):
+        # Email implementation...
+        pass
+
+
+# Global storage and services
+members = {}
+classes = {}
+bookings = {}
+notification_service = EmailNotificationService()
+
+# Functions for CLI
+def create_member(member_id, name, email, membership_type):
+    # ... validation and creation ...
+    pass
+
+def book_class(member_id, class_id):
+    # ... booking logic ...
+    pass
+
+# ... more functions ...
+# ... main() CLI loop ...
 ```
 
-Notice the structure: **Given-When-Then**. This makes tests readable and forces you to think through the scenario.
+**The problem:** This code works, but we have no automated way to verify it. To test if a member can book a class, we have to:
+1. Run the entire program
+2. Type commands manually
+3. Check the output with our eyes
+4. Repeat for every scenario
 
-### Step 5: Let the Test Drive the Design
+What if we could automatically verify that:
+- Members can't book without credits?
+- Classes can't exceed capacity?
+- Email validation works correctly?
+- Premium members get free classes?
 
-When you write the test first, you're forced to answer design questions:
-- What parameters does `book_class()` need?
-- What does it return?
-- How does `Member` track credits?
-- How does `FitnessClass` track capacity?
+We need automated tests.
 
-These aren't implementation details—they're interface decisions. And TDD forces you to make them consciously, from the perspective of the code's user.
+## The New Challenge
 
-### Step 6: Repeat for Each Scenario
+The gym's CEO calls a meeting: "We're rolling out to three new locations next month. We can't afford bugs in production. Before we deploy any new feature, I need proof it works."
 
-Once the happy path works, add tests for edge cases and error conditions. Each test adds a new behavior. Each behavior is verified independently.
+Fair request. But our current approach to testing is manual. To verify booking logic:
+1. Run `python gym_booking.py`
+2. Type `add-member M001 Alice alice@example.com premium`
+3. Type `add-class C001 Yoga 20 Monday 09:00`
+4. Type `book M001 C001`
+5. Type `members` to verify credits were deducted
+6. Repeat for every edge case
 
-**This is how TDD shapes architecture:** You start with user value (the story), break it into behaviors (scenarios), specify each behavior (tests), and let the implementation emerge from those specifications.
+This is:
+- **Slow:** Each test takes minutes of manual work
+- **Error-prone:** Easy to miss edge cases
+- **Unrepeatable:** Can't run the same tests quickly
+- **Unmaintainable:** As features grow, manual testing becomes impossible
 
-Let's see this process in action.
+## Why Our Current Approach Struggles
 
-## Starting Simple: Our First Feature
+### Problem 1: Business Logic Is Tangled With the CLI
 
-We'll build the simplest possible feature: creating a member.
-
-From a user's perspective: "I want to register a new gym member with a name and email address."
-
-We start with a test. Not with the implementation. The test describes what we want.
-
-**Note:** Python's built-in `unittest` module provides everything we need for testing. We'll use it throughout this book.
+Try to test the `Member` class:
 
 ```python
-# tests/test_member.py
-def test_create_member():
+# How do you test this without running the whole program?
+member = Member("M001", "Alice", "alice@example.com", "premium", PremiumPricing())
+```
+
+You can't. The `Member` class is defined inside `gym_booking.py`, which runs the CLI loop when imported. You can't import it without starting the interactive program.
+
+### Problem 2: No Way to Verify Edge Cases
+
+Let's say you want to verify: "Members with zero credits can't book classes."
+
+How do you test this? You'd need to:
+1. Create a member
+2. Book classes until they run out of credits
+3. Try to book one more
+4. Verify it fails
+
+Then do it again for the next edge case. And again. And again.
+
+### Problem 3: Can't Test Without Side Effects
+
+The `book_class()` function:
+- Modifies global dictionaries
+- Sends email notifications
+- Prints to console
+
+How do you test that booking logic works without actually sending emails? Without modifying production data? Without cluttering your terminal?
+
+You can't. The code isn't designed for testing.
+
+## What Is Test-Driven Development?
+
+**Test-Driven Development (TDD)** is a discipline where you write tests before you write code.
+
+The rhythm is simple: **Red, Green, Refactor.**
+
+1. **Red:** Write a failing test. The test describes what you want the code to do. It fails because the code doesn't exist yet.
+2. **Green:** Write the simplest code that makes the test pass. Don't worry about elegance. Just make it work.
+3. **Refactor:** Improve the code while keeping tests green. Remove duplication. Apply SOLID principles.
+
+Then repeat. Each cycle is small—a few minutes at most. Each cycle adds a behavior. Over time, a well-tested, well-designed system emerges.
+
+**Why does this matter?**
+
+TDD isn't just about testing. It's a design discipline. When you write tests first, you're forced to think about how code will be used before you write it. You discover design problems early, when they're cheap to fix.
+
+More importantly, TDD builds a safety net. Every test is executable proof that your code works. This safety net lets you refactor confidently. You can change implementation details knowing that if you break something, the tests will tell you.
+
+This is why TDD comes before architectural patterns. The patterns we'll learn in later chapters—layers, domain models, ports and adapters—all require refactoring. You can't refactor safely without tests.
+
+**TDD enables architecture.**
+
+## Refactoring Step 1: Separate Code From CLI
+
+Before we can write tests, we need to separate our business logic from the CLI. Let's extract our classes into a separate module.
+
+Create a new file structure:
+
+```
+gym_booking/
+  ├── domain.py          # New: Domain classes
+  ├── pricing.py         # New: Pricing strategies
+  ├── notifications.py   # New: Notification service
+  ├── cli.py            # New: CLI interface (renamed from gym_booking.py)
+  └── tests/
+      └── test_member.py # New: Our first test!
+```
+
+**domain.py:**
+```python
+from datetime import datetime
+
+class Member:
+    """Represents a gym member with validation."""
+    
+    def __init__(self, member_id, name, email, membership_type, pricing_strategy):
+        if '@' not in email or '.' not in email:
+            raise ValueError(f"Invalid email address: {email}")
+        
+        self.id = member_id
+        self.name = name
+        self.email = email
+        self.membership_type = membership_type
+        self.pricing_strategy = pricing_strategy
+        self.credits = 20 if membership_type == 'premium' else 10
+    
+    def can_book(self):
+        return self.credits > 0
+    
+    def deduct_credit(self):
+        if self.credits > 0:
+            self.credits -= 1
+    
+    def get_class_price(self):
+        return self.pricing_strategy.calculate_price()
+
+
+class FitnessClass:
+    """Represents a fitness class."""
+    
+    def __init__(self, class_id, name, capacity, day, start_time):
+        if capacity <= 0:
+            raise ValueError("Capacity must be positive")
+        
+        self.id = class_id
+        self.name = name
+        self.capacity = capacity
+        self.day = day
+        self.start_time = start_time
+        self.bookings = []
+    
+    def spots_available(self):
+        return self.capacity - len(self.bookings)
+    
+    def is_full(self):
+        return self.spots_available() <= 0
+
+
+class Booking:
+    """Represents a class booking."""
+    
+    def __init__(self, booking_id, member_id, class_id):
+        self.id = booking_id
+        self.member_id = member_id
+        self.class_id = class_id
+        self.status = 'confirmed'
+        self.booked_at = datetime.now()
+    
+    def cancel(self):
+        self.status = 'cancelled'
+```
+
+Now we can import these classes in tests without running the CLI!
+
+## Writing Our First Test
+
+Let's test the `Member` class. We'll use Python's built-in `pytest` framework (install with `pip install pytest`).
+
+**tests/test_member.py:**
+```python
+import pytest
+from domain import Member
+from pricing import PremiumPricing, BasicPricing
+
+def test_create_member_with_valid_email():
+    """Test that a member can be created with valid data."""
+    # Given: Valid member data
     member = Member(
         member_id="M001",
         name="Alice Johnson",
-        email="alice@example.com"
+        email="alice@example.com",
+        membership_type="premium",
+        pricing_strategy=PremiumPricing()
     )
     
+    # Then: Member is created with correct attributes
     assert member.id == "M001"
     assert member.name == "Alice Johnson"
     assert member.email == "alice@example.com"
-```
+    assert member.membership_type == "premium"
+    assert member.credits == 20  # Premium members get 20 credits
 
-Run the test. It fails. `NameError: name 'Member' is not defined`. **Red.**
 
-Now write the simplest code that makes it pass:
-
-```python
-# domain/member.py
-class Member:
-    def __init__(self, member_id: str, name: str, email: str):
-        self.id = member_id
-        self.name = name
-        self.email = email
-```
-
-Run the test. It passes. **Green.**
-
-Look at the code. Is there duplication? Can it be improved? Not yet. It's simple enough. We're done with this cycle.
-
-**This is the TDD rhythm.** Test first. Make it pass. Clean it up. Move on.
-
-## Adding Business Rules
-
-Now we want validation. Email addresses must be valid. Names can't be empty.
-
-Start with a test:
-
-```python
-def test_member_requires_valid_email():
-    try:
+def test_create_member_with_invalid_email():
+    """Test that invalid email raises an error."""
+    # When: Creating a member with invalid email
+    # Then: ValueError is raised
+    with pytest.raises(ValueError, match="Invalid email address"):
         Member(
             member_id="M001",
-            name="Alice Johnson",
-            email="not-an-email"
+            name="Alice",
+            email="not-an-email",  # No @ or .
+            membership_type="premium",
+            pricing_strategy=PremiumPricing()
         )
-        assert False, "Expected ValueError to be raised"
-    except ValueError as e:
-        assert "Invalid email" in str(e)
 
-def test_member_requires_non_empty_name():
-    try:
-        Member(
-            member_id="M001",
-            name="",
-            email="alice@example.com"
-        )
-        assert False, "Expected ValueError to be raised"
-    except ValueError as e:
-        assert "Name cannot be empty" in str(e)
-```
 
-Run the tests. They fail. **Red.**
+def test_premium_member_gets_20_credits():
+    """Test that premium members start with 20 credits."""
+    member = Member("M001", "Alice", "alice@example.com", "premium", PremiumPricing())
+    assert member.credits == 20
 
-Make them pass:
 
-```python
-import re
+def test_basic_member_gets_10_credits():
+    """Test that basic members start with 10 credits."""
+    member = Member("M001", "Bob", "bob@example.com", "basic", BasicPricing())
+    assert member.credits == 10
 
-class Member:
-    def __init__(self, member_id: str, name: str, email: str):
-        if not name:
-            raise ValueError("Name cannot be empty")
-        
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            raise ValueError("Invalid email")
-        
-        self.id = member_id
-        self.name = name
-        self.email = email
-```
 
-Run the tests. They pass. **Green.**
+def test_member_can_book_with_credits():
+    """Test that members with credits can book."""
+    member = Member("M001", "Alice", "alice@example.com", "premium", PremiumPricing())
+    assert member.can_book() is True
 
-Refactor? The email validation is a business rule. It might be used elsewhere. Let's extract it:
 
-```python
-# domain/value_objects.py
-import re
+def test_member_cannot_book_without_credits():
+    """Test that members without credits cannot book."""
+    member = Member("M001", "Alice", "alice@example.com", "basic", BasicPricing())
+    member.credits = 0
+    assert member.can_book() is False
 
-class EmailAddress:
-    def __init__(self, email: str):
-        if not re.match(r"[^@]+@[^@]+\.[^@]+", email):
-            raise ValueError("Invalid email")
-        self._email = email
+
+def test_deduct_credit_reduces_credits():
+    """Test that deducting a credit reduces the count."""
+    member = Member("M001", "Alice", "alice@example.com", "premium", PremiumPricing())
+    initial_credits = member.credits
     
-    def __str__(self):
-        return self._email
-
-# domain/member.py
-class Member:
-    def __init__(self, member_id: str, name: str, email: str):
-        if not name:
-            raise ValueError("Name cannot be empty")
-        
-        self.id = member_id
-        self.name = name
-        self.email = EmailAddress(email)
+    member.deduct_credit()
+    
+    assert member.credits == initial_credits - 1
 ```
 
-Run the tests. Still green. But now we have a value object that enforces email validity everywhere. This is refactoring guided by tests.
+Run the tests:
 
-**Note:** This `EmailAddress` is a simple value object. Chapter 5 expands on value objects as a domain modeling pattern, showing how they make invalid states impossible and encapsulate business rules. For now, focus on how TDD's refactor step naturally leads to better abstractions.
+```bash
+$ pytest tests/test_member.py -v
+========================= test session starts =========================
+tests/test_member.py::test_create_member_with_valid_email PASSED
+tests/test_member.py::test_create_member_with_invalid_email PASSED
+tests/test_member.py::test_premium_member_gets_20_credits PASSED
+tests/test_member.py::test_basic_member_gets_10_credits PASSED
+tests/test_member.py::test_member_can_book_with_credits PASSED
+tests/test_member.py::test_member_cannot_book_without_credits PASSED
+tests/test_member.py::test_deduct_credit_reduces_credits PASSED
+======================== 7 passed in 0.03s ========================
+```
 
-## Building a Complete Feature: Booking a Class
+**What just happened?**
 
-Let's build something more complex: booking a member into a fitness class.
+We verified seven different scenarios in 0.03 seconds. No manual typing. No visual inspection. Automated proof that our `Member` class works correctly.
 
-**Business rules:**
-- The class must have available capacity
-- The member must have sufficient credits
-- A booking creates a record
+## Testing FitnessClass
 
-Before we write the test, let's think through what we're building. This habit—analyzing before coding—is what separates TDD from "test-after development."
+Let's add tests for `FitnessClass`:
 
-### What Does This Feature Actually Need to Do?
-
-Looking at our business rules, we can identify the core scenario:
-- **Happy path:** A member with credits books a class that has space
-
-We also see implied failure scenarios:
-- **No credits:** Member tries to book but has no credits left
-- **Class full:** Member tries to book but the class is at capacity
-
-Each scenario needs a test. But let's start with the happy path—the simplest case that delivers value.
-
-### What Objects Do We Need?
-
-From the business rules, three concepts emerge:
-- **Member** - needs to track credits
-- **FitnessClass** - needs to track capacity and current bookings
-- **Booking** - a record that links member to class
-
-### What Behavior Goes Where?
-
-This is the key question TDD forces you to answer early:
-- Should `book_class()` check credits, or should `Member`?
-- Should `book_class()` check capacity, or should `FitnessClass`?
-
-We'll discover the answer by writing the test and seeing what interface makes sense.
-
-Start with the test:
-
+**tests/test_fitness_class.py:**
 ```python
-def test_book_class_success():
-    member = Member(
-        member_id="M001",
-        name="Alice",
-        email="alice@example.com",
-        credits=10
-    )
-    
+import pytest
+from domain import FitnessClass
+
+def test_create_fitness_class():
+    """Test creating a fitness class with valid data."""
     fitness_class = FitnessClass(
         class_id="C001",
         name="Yoga Flow",
-        capacity=20
+        capacity=20,
+        day="Monday",
+        start_time="09:00"
     )
     
-    booking = book_class(member, fitness_class)
+    assert fitness_class.id == "C001"
+    assert fitness_class.name == "Yoga Flow"
+    assert fitness_class.capacity == 20
+    assert fitness_class.day == "Monday"
+    assert fitness_class.start_time == "09:00"
+    assert len(fitness_class.bookings) == 0
+
+
+def test_cannot_create_class_with_zero_capacity():
+    """Test that capacity must be positive."""
+    with pytest.raises(ValueError, match="Capacity must be positive"):
+        FitnessClass("C001", "Yoga", 0, "Monday", "09:00")
+
+
+def test_cannot_create_class_with_negative_capacity():
+    """Test that capacity cannot be negative."""
+    with pytest.raises(ValueError, match="Capacity must be positive"):
+        FitnessClass("C001", "Yoga", -5, "Monday", "09:00")
+
+
+def test_spots_available_when_empty():
+    """Test spots available equals capacity when no bookings."""
+    fitness_class = FitnessClass("C001", "Yoga", 20, "Monday", "09:00")
+    assert fitness_class.spots_available() == 20
+
+
+def test_spots_available_decreases_with_bookings():
+    """Test spots available decreases as bookings are added."""
+    fitness_class = FitnessClass("C001", "Yoga", 20, "Monday", "09:00")
+    fitness_class.bookings.append("M001")
+    fitness_class.bookings.append("M002")
     
-    assert booking.member_id == "M001"
-    assert booking.class_id == "C001"
-    assert booking.status == "confirmed"
-    assert member.credits == 9
-    assert fitness_class.current_bookings == 1
+    assert fitness_class.spots_available() == 18
+
+
+def test_class_not_full_initially():
+    """Test that a new class is not full."""
+    fitness_class = FitnessClass("C001", "Yoga", 20, "Monday", "09:00")
+    assert fitness_class.is_full() is False
+
+
+def test_class_is_full_at_capacity():
+    """Test that a class is full when bookings equal capacity."""
+    fitness_class = FitnessClass("C001", "Yoga", 2, "Monday", "09:00")
+    fitness_class.bookings.append("M001")
+    fitness_class.bookings.append("M002")
+    
+    assert fitness_class.is_full() is True
 ```
 
-**Red.** The function doesn't exist.
+Run all tests:
 
-Make it pass:
-
-```python
-from dataclasses import dataclass
-from datetime import datetime
-
-@dataclass
-class Booking:
-    booking_id: str
-    member_id: str
-    class_id: str
-    status: str
-    booked_at: datetime
-
-def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
-    if member.credits <= 0:
-        raise ValueError("Insufficient credits")
-    
-    if fitness_class.is_full():
-        raise ValueError("Class is full")
-    
-    member.credits -= 1
-    fitness_class.current_bookings += 1
-    
-    return Booking(
-        booking_id=generate_booking_id(),
-        member_id=member.id,
-        class_id=fitness_class.id,
-        status="confirmed",
-        booked_at=datetime.now()
-    )
+```bash
+$ pytest tests/ -v
+========================= test session starts =========================
+tests/test_member.py::test_create_member_with_valid_email PASSED
+tests/test_member.py::test_create_member_with_invalid_email PASSED
+tests/test_member.py::test_premium_member_gets_20_credits PASSED
+tests/test_member.py::test_basic_member_gets_10_credits PASSED
+tests/test_member.py::test_member_can_book_with_credits PASSED
+tests/test_member.py::test_member_cannot_book_without_credits PASSED
+tests/test_member.py::test_deduct_credit_reduces_credits PASSED
+tests/test_fitness_class.py::test_create_fitness_class PASSED
+tests/test_fitness_class.py::test_cannot_create_class_with_zero_capacity PASSED
+tests/test_fitness_class.py::test_cannot_create_class_with_negative_capacity PASSED
+tests/test_fitness_class.py::test_spots_available_when_empty PASSED
+tests/test_fitness_class.py::test_spots_available_decreases_with_bookings PASSED
+tests/test_fitness_class.py::test_class_not_full_initially PASSED
+tests/test_fitness_class.py::test_class_is_full_at_capacity PASSED
+======================== 14 passed in 0.04s ========================
 ```
 
-**Green.** Tests pass.
+We now have 14 automated tests. They run in milliseconds. They verify business rules. They give us confidence.
 
-But wait. This function directly modifies `member.credits` and `fitness_class.current_bookings`. That's fragile. What if we need to enforce rules about credit deduction? What if class capacity logic gets more complex?
+## Test-Driving a New Feature: Waitlist
 
-Refactor:
+Now let's use TDD to add a new feature from scratch. The gym wants a waitlist for full classes.
 
+**Business requirement:** "When a class is full, members should be able to join a waitlist. If someone cancels, the first person on the waitlist gets their spot."
+
+Let's break this into testable scenarios:
+
+1. Members can join waitlist when class is full
+2. Waitlist is processed in order (FIFO)
+3. Cancelling a booking offers spot to first waitlist member
+4. Can't join waitlist if already booked in the class
+
+### Red: Write Failing Tests
+
+Let's start with the first scenario:
+
+**tests/test_waitlist.py:**
 ```python
-class Member:
-    def __init__(self, member_id: str, name: str, email: str, credits: int):
-        if not name:
-            raise ValueError("Name cannot be empty")
-        
-        self.id = member_id
-        self.name = name
-        self.email = EmailAddress(email)
-        self._credits = credits
-    
-    def deduct_credit(self):
-        if self._credits <= 0:
-            raise ValueError("Insufficient credits")
-        self._credits -= 1
-    
-    @property
-    def credits(self):
-        return self._credits
+import pytest
+from domain import FitnessClass
 
+def test_can_join_waitlist_when_class_full():
+    """Test that members can join waitlist when class is full."""
+    # Given: A full class
+    fitness_class = FitnessClass("C001", "Yoga", 2, "Monday", "09:00")
+    fitness_class.bookings.append("M001")
+    fitness_class.bookings.append("M002")
+    
+    # When: A member tries to join the waitlist
+    fitness_class.add_to_waitlist("M003")
+    
+    # Then: They are added to the waitlist
+    assert "M003" in fitness_class.waitlist
+```
 
+Run the test:
+
+```bash
+$ pytest tests/test_waitlist.py -v
+========================= test session starts =========================
+tests/test_waitlist.py::test_can_join_waitlist_when_class_full FAILED
+======================== FAILURES ========================
+E   AttributeError: 'FitnessClass' object has no attribute 'waitlist'
+```
+
+**Red!** The test fails because `FitnessClass` doesn't have a waitlist yet.
+
+### Green: Make It Pass
+
+Add the simplest code to make the test pass:
+
+**domain.py:**
+```python
 class FitnessClass:
-    def __init__(self, class_id: str, name: str, capacity: int):
+    def __init__(self, class_id, name, capacity, day, start_time):
+        if capacity <= 0:
+            raise ValueError("Capacity must be positive")
+        
         self.id = class_id
         self.name = name
-        self._capacity = capacity
-        self._bookings = []
+        self.capacity = capacity
+        self.day = day
+        self.start_time = start_time
+        self.bookings = []
+        self.waitlist = []  # NEW
     
-    def add_booking(self, member_id: str):
-        if self.is_full():
-            raise ValueError("Class is full")
-        self._bookings.append(member_id)
+    def spots_available(self):
+        return self.capacity - len(self.bookings)
     
-    def is_full(self) -> bool:
-        return len(self._bookings) >= self._capacity
+    def is_full(self):
+        return self.spots_available() <= 0
     
-    @property
-    def current_bookings(self):
-        return len(self._bookings)
-
-
-def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
-    member.deduct_credit()
-    fitness_class.add_booking(member.id)
-    
-    return Booking(
-        booking_id=generate_booking_id(),
-        member_id=member.id,
-        class_id=fitness_class.id,
-        status="confirmed",
-        booked_at=datetime.now()
-    )
+    def add_to_waitlist(self, member_id):  # NEW
+        self.waitlist.append(member_id)
 ```
 
-**Evolution Note:** We've changed `self.credits` to `self._credits` with a property. This encapsulation lets us add logic (like expiry checks) in Chapter 5 without changing the interface. Tests still pass because the public API (`member.credits`) remains the same.
+Run the test again:
 
-Run the tests. Still green. But now the business rules live in the domain objects. `Member` enforces credit rules. `FitnessClass` enforces capacity rules. The booking function just orchestrates.
+```bash
+$ pytest tests/test_waitlist.py -v
+========================= test session starts =========================
+tests/test_waitlist.py::test_can_join_waitlist_when_class_full PASSED
+======================== 1 passed in 0.01s ========================
+```
 
-**What just happened?** We answered the question "what behavior goes where?" through TDD:
-- First attempt: `book_class()` directly manipulated credits and bookings (worked, but fragile)
-- Refactored: Domain objects (`Member`, `FitnessClass`) enforce their own rules
-- Result: Better design emerged from the refactor step
+**Green!** The test passes.
 
-This is TDD driving design. The tests forced us to think about the interface. The refactoring step let us improve the structure. The safety net let us move code around confidently.
+### Red: Add More Scenarios
 
-**Notice the pattern:**
-1. Business rule → Test scenario → Required objects and behavior
-2. Write test → Discover what interface you need
-3. Make it pass → Prove the behavior works
-4. Refactor → Move logic where it belongs
+Now let's test that we can't join the waitlist if already booked:
 
-This pattern repeats throughout the book. In Chapter 5, we'll see how these domain objects become entities and value objects. In Chapter 6, we'll see how `book_class()` becomes a use case. But it all starts here, with tests driving the design.
-
-## Test-Driven Design Decisions
-
-TDD influences design in specific, observable ways.
-
-### Testable Code Is Decoupled Code
-
-When you write tests first, you naturally create boundaries. A function that does one thing is easier to test than a function that does ten things. A class with clear dependencies is easier to test than a class with hidden global state.
-
-If a test is hard to write, it's usually because the code is too coupled. The test is telling you something.
-
+**tests/test_waitlist.py:**
 ```python
-# Hard to test - coupled to infrastructure
-def book_class(member_id: str, class_id: str):
-    conn = sqlite3.connect('gym.db')
-    cursor = conn.cursor()
-    cursor.execute("SELECT credits FROM members WHERE id = ?", (member_id,))
-    credits = cursor.fetchone()[0]
+def test_cannot_join_waitlist_if_already_booked():
+    """Test that you can't join waitlist if you're already booked."""
+    # Given: A member is already booked in a class
+    fitness_class = FitnessClass("C001", "Yoga", 20, "Monday", "09:00")
+    fitness_class.bookings.append("M001")
     
-    if credits <= 0:
-        raise ValueError("Insufficient credits")
-    
-    cursor.execute("UPDATE members SET credits = credits - 1 WHERE id = ?", (member_id,))
-    conn.commit()
-    # More database code...
+    # When/Then: They try to join waitlist and it fails
+    with pytest.raises(ValueError, match="Already booked in this class"):
+        fitness_class.add_to_waitlist("M001")
 ```
 
-To test this, you need a real database. Every test requires setup and teardown. Changes to the database schema break tests. The test is screaming: "This function does too much!"
+Run it:
 
-TDD pushes you toward this:
+```bash
+$ pytest tests/test_waitlist.py::test_cannot_join_waitlist_if_already_booked -v
+FAILED
+E   Failed: DID NOT RAISE <class 'ValueError'>
+```
 
+**Red!** Now make it pass.
+
+### Green: Implement the Check
+
+**domain.py:**
 ```python
-# Easy to test - dependencies injected
-def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
-    member.deduct_credit()
-    fitness_class.add_booking(member.id)
-    return Booking(...)
+def add_to_waitlist(self, member_id):
+    if member_id in self.bookings:
+        raise ValueError("Already booked in this class")
+    self.waitlist.append(member_id)
 ```
 
-No database. No infrastructure. Just domain objects interacting. The test is simple because the design is simple.
+Run the tests:
 
-### Tests Define Contracts
+```bash
+$ pytest tests/test_waitlist.py -v
+========================= test session starts =========================
+tests/test_waitlist.py::test_can_join_waitlist_when_class_full PASSED
+tests/test_waitlist.py::test_cannot_join_waitlist_if_already_booked PASSED
+======================== 2 passed in 0.01s ========================
+```
 
-When you write a test first, you're defining a contract. "This function, given these inputs, produces this output." That contract becomes documentation. It becomes a specification. It becomes proof that the code works.
+**Green!**
 
+### Refactor: Improve the Design
+
+Now that we have tests, we can refactor safely. Let's add a method to process the waitlist when a booking is cancelled:
+
+**tests/test_waitlist.py:**
 ```python
-def test_cancellation_refunds_credit():
-    """When a booking is cancelled, the member gets their credit back."""
-    member = Member("M001", "Alice", "alice@example.com", credits=5)
-    booking = Booking("B001", "M001", "C001", "confirmed", datetime.now())
+def test_waitlist_member_gets_spot_when_booking_cancelled():
+    """Test that first waitlist member gets spot when booking cancelled."""
+    # Given: A full class with one person on waitlist
+    fitness_class = FitnessClass("C001", "Yoga", 2, "Monday", "09:00")
+    fitness_class.bookings.append("M001")
+    fitness_class.bookings.append("M002")
+    fitness_class.add_to_waitlist("M003")
     
-    cancel_booking(member, booking)
+    # When: A booking is removed
+    fitness_class.bookings.remove("M002")
+    promoted = fitness_class.process_waitlist()
     
-    assert member.credits == 6
-    assert booking.status == "cancelled"
+    # Then: First waitlist member is promoted
+    assert promoted == "M003"
+    assert "M003" in fitness_class.bookings
+    assert "M003" not in fitness_class.waitlist
 ```
 
-This test is a specification. It says exactly what cancellation means. Anyone reading this code knows what to expect. Six months from now, when you've forgotten the details, the test remembers.
+**Red** → Implement `process_waitlist()` → **Green**:
 
-### Red-Green-Refactor Prevents Over-Engineering
-
-TDD's rhythm keeps you focused. Write the test. Make it pass. Clean it up. That's it.
-
-You don't add features you don't need. You don't abstract before you understand the pattern. You don't optimize before you measure. The test defines what's needed. Nothing more.
-
-This is how you avoid over-engineering. You only add complexity when the tests demand it. When two tests require the same setup code, you extract a helper. When three classes need the same validation, you create a value object. But not before.
-
-TDD is incremental. It resists the urge to build everything up front.
-
-## The Testing Pyramid
-
-Not all tests are created equal. Some are fast, focused, and fragile. Some are slow, comprehensive, and stable. A well-tested system has the right balance.
-
-The **testing pyramid** is a guide:
-
-```
-        /\
-       /  \
-      / E2E \      End-to-End: Few, slow, realistic
-     /______\
-    /        \
-   /Integration\   Integration: Some, medium speed, focused
-  /____________\
- /              \
-/   Unit Tests   \  Unit: Many, fast, isolated
-/__________________\
-```
-
-**Unit tests** are at the base. They test individual functions or classes in isolation—no databases, no network, no external dependencies. They're fast—milliseconds. They're focused—one behavior per test. They're many—hundreds or thousands. Unit tests verify that your business logic works correctly.
-
+**domain.py:**
 ```python
-def test_member_deduct_credit():
-    """Unit test: tests a single method in isolation"""
-    member = Member("M001", "Alice", "alice@example.com", credits=10)
-    member.deduct_credit()
-    assert member.credits == 9
+def process_waitlist(self):
+    """Move first waitlist member to bookings if space available."""
+    if self.waitlist and not self.is_full():
+        member_id = self.waitlist.pop(0)  # FIFO
+        self.bookings.append(member_id)
+        return member_id
+    return None
 ```
 
-**Integration tests** are in the middle. They test how components work together—your code interacting with databases, file systems, or other services. They're slower—seconds. They're broader—testing workflows across multiple classes. Integration tests verify that your code integrates correctly with external systems.
+Run all tests:
 
-```python
-def test_booking_persists_to_database():
-    """Integration test: tests interaction with database"""
-    repo = SqliteMemberRepository(test_db)
-    member = Member("M001", "Alice", "alice@example.com", credits=10)
-    repo.save(member)
-    
-    loaded = repo.get_by_id("M001")
-    assert loaded.credits == 10
+```bash
+$ pytest tests/ -v
+========================= test session starts =========================
+tests/test_member.py::test_create_member_with_valid_email PASSED
+tests/test_member.py::test_create_member_with_invalid_email PASSED
+... (14 member and fitness class tests)
+tests/test_waitlist.py::test_can_join_waitlist_when_class_full PASSED
+tests/test_waitlist.py::test_cannot_join_waitlist_if_already_booked PASSED
+tests/test_waitlist.py::test_waitlist_member_gets_spot_when_booking_cancelled PASSED
+======================== 17 passed in 0.05s ========================
 ```
 
-**End-to-end tests** (E2E) are at the top. They test the entire system from the user's perspective—HTTP requests, database, email sending, everything running together as it would in production. They're slowest—minutes. They're fewest—a handful of critical paths. E2E tests verify that the complete user workflow works as expected.
+**We just built a complete feature using TDD.** Each test drove a piece of behavior. Each piece builds on the last. The tests prove it works.
 
-```python
-def test_complete_booking_flow():
-    """E2E test: tests complete user workflow through HTTP API"""
-    response = client.post('/bookings', json={
-        'member_id': 'M001',
-        'class_id': 'C001'
-    })
-    
-    assert response.status_code == 201
-    assert response.json['status'] == 'confirmed'
+## What We Have Now
+
+Let's take stock of our progress. We've added testing to our gym booking system:
+
+**Our code now has:**
+1. **Separated concerns:** Classes in `domain.py`, not tangled with CLI
+2. **Automated tests:** 17 tests verifying business logic
+3. **Test suite:** Can run all tests in milliseconds
+4. **Confidence:** Tests prove business rules work
+5. **New feature:** Waitlist functionality, built with TDD
+
+**But we still have:**
+- Classes in simple .py files (no package structure yet)
+- In-memory storage (dictionaries in CLI)
+- No database persistence
+- Everything still runs from the CLI
+- Business logic and storage mixed together
+
+**Current file structure:**
+```
+gym_booking/
+  ├── domain.py              # Domain classes
+  ├── pricing.py             # Pricing strategies
+  ├── notifications.py       # Notification service
+  ├── cli.py                # CLI interface
+  └── tests/
+      ├── test_member.py
+      ├── test_fitness_class.py
+      └── test_waitlist.py
 ```
 
-The pyramid shape matters. Most tests should be unit tests. They run fast, so you run them constantly. Integration tests are slower, so you have fewer. End-to-end tests are slowest, so you have just enough to verify critical workflows.
+This is progress! We can now:
+- Verify business logic automatically
+- Refactor with confidence
+- Add features using TDD
+- Catch bugs before production
 
-If your pyramid is inverted—mostly end-to-end tests, few unit tests—your test suite is slow and brittle. Tests take minutes to run. Failures are hard to debug. You stop running tests before every commit.
+But our tests reveal a problem: **business logic is still tangled with data storage.** Look at our tests—they directly manipulate `fitness_class.bookings` lists and `member.credits` integers. When we want to persist data to a database, these tests will break.
 
-TDD naturally builds the right pyramid. When you write tests first, you start with unit tests. Integration and end-to-end tests come later, as you verify that components work together.
+## Transition to Chapter 4
 
-## TDD in Practice: A Complete Example
+We have tests. We have confidence. But the tests exposed a deeper issue: **where does data persistence belong?**
 
-Let's build a feature from scratch using TDD: premium members get priority when a class is full.
+Right now, business logic and storage are intertwined:
+- `FitnessClass` stores bookings in a list
+- `Member` tracks credits as an integer
+- The CLI manages global dictionaries
 
-**Business rule:** When a class is full, premium members can join a waitlist. When someone cancels, the next premium member on the waitlist gets the spot.
+When we add database persistence (and we will), where does that code go? If we put it in `Member` or `FitnessClass`, our tests will require a database. If we put it in the CLI, we're mixing concerns again.
 
-Before we write any tests, let's think through what we're building. This is a critical step that many developers skip—they jump straight to writing tests without understanding what behavior they're trying to capture.
+We need layers. We need to separate:
+- **Business rules** (domain logic that never changes)
+- **Application logic** (orchestrating use cases)
+- **Infrastructure** (databases, email, external services)
+- **Interface** (CLI, APIs, anything that talks to users)
 
-### Breaking Down the Feature
+In Chapter 4, we'll learn **Layered Architecture**. We'll reorganize our code into layers. We'll create use cases that orchestrate domain objects. We'll add database persistence without breaking our tests. And we'll discover that good architecture makes testing even easier.
 
-TDD doesn't mean "write random tests." It means "write tests that specify the behavior you need." To do that, you need to understand the behavior first.
+**The challenge:** "We need to save data to a database so bookings persist between sessions. Where does that code go? How do we keep our tests fast?"
 
-#### What scenarios does this business rule create?
-
-Let's analyze the business rule and identify the distinct paths through our system:
-
-1. **Premium member encounters full class** - A premium member tries to book a full class and should be added to a waitlist instead of being rejected
-2. **Basic member encounters full class** - A basic member tries to book a full class and should get an error (no waitlist access)
-3. **Cancellation promotes waitlisted member** - When someone cancels their booking, the first premium member on the waitlist should automatically get the spot
-
-Each scenario represents a different behavior we need to test.
-
-#### What domain concepts emerge?
-
-From these scenarios, we can see we need:
-
-- **Member with membership type** - We need to distinguish premium from basic members
-- **FitnessClass with waitlist** - Classes need to track both confirmed bookings and waitlisted members
-- **Waitlist rules** - Logic for who can join and when they get promoted
-
-#### How do tests reveal architecture?
-
-Notice what happened: we started with a business rule, broke it into scenarios, and discovered the objects and behaviors we need. **The tests will make these discoveries explicit.**
-
-When we write the test for "premium member encounters full class," we'll be forced to decide:
-- How does a Member know if it's premium?
-- How does a FitnessClass track waitlisted members?
-- What does the `book_class` function return when someone is waitlisted?
-
-**This is how TDD drives design.** The test forces you to answer these questions before you write implementation code. You design the interface (what the code does) before the implementation (how it does it).
-
-### Step 1: Write the Test
-
-Now that we understand what we're building, let's write a test for the first scenario: premium member encounters full class.
-
-```python
-def test_premium_member_joins_waitlist_when_class_full():
-    premium_member = Member(
-        member_id="M001",
-        name="Alice",
-        email="alice@example.com",
-        membership_type="premium",
-        credits=10
-    )
-    
-    fitness_class = FitnessClass(
-        class_id="C001",
-        name="Yoga",
-        capacity=1
-    )
-    
-    # Fill the class
-    basic_member = Member("M002", "Bob", "bob@example.com", "basic", 10)
-    fitness_class.add_booking(basic_member.id)
-    
-    # Premium member tries to book
-    result = book_class(premium_member, fitness_class)
-    
-    assert result.status == "waitlisted"
-    assert premium_member in fitness_class.waitlist
-```
-
-**Red.** The code doesn't exist.
-
-**What did this test reveal about our design?**
-
-Look at what we had to decide just to write this test:
-- `Member` needs a `membership_type` parameter
-- `FitnessClass` needs to track a `waitlist` (separate from bookings)
-- `book_class` needs to return a result with a `status` field
-- There's a concept of "waitlisted" as a booking status
-
-These are design decisions. We made them by thinking about how the code should be used, not how it will be implemented. This is the power of TDD—it forces you to design from the outside in.
-
-### Step 2: Make It Pass
-
-```python
-class Member:
-    def __init__(self, member_id: str, name: str, email: str, 
-                 membership_type: str, credits: int):
-        self.id = member_id
-        self.name = name
-        self.email = EmailAddress(email)
-        self.membership_type = membership_type
-        self._credits = credits
-    
-    def is_premium(self) -> bool:
-        return self.membership_type == "premium"
-
-
-class FitnessClass:
-    def __init__(self, class_id: str, name: str, capacity: int):
-        self.id = class_id
-        self.name = name
-        self._capacity = capacity
-        self._bookings = []
-        self._waitlist = []
-    
-    def add_to_waitlist(self, member_id: str):
-        if member_id not in self._waitlist:
-            self._waitlist.append(member_id)
-    
-    @property
-    def waitlist(self):
-        return self._waitlist.copy()
-
-
-def book_class(member: Member, fitness_class: FitnessClass) -> Booking:
-    if fitness_class.is_full():
-        if member.is_premium():
-            fitness_class.add_to_waitlist(member.id)
-            return Booking(
-                booking_id=generate_booking_id(),
-                member_id=member.id,
-                class_id=fitness_class.id,
-                status="waitlisted",
-                booked_at=datetime.now()
-            )
-        else:
-            raise ValueError("Class is full")
-    
-    member.deduct_credit()
-    fitness_class.add_booking(member.id)
-    
-    return Booking(
-        booking_id=generate_booking_id(),
-        member_id=member.id,
-        class_id=fitness_class.id,
-        status="confirmed",
-        booked_at=datetime.now()
-    )
-```
-
-**Green.** Test passes.
-
-**What did making this test pass reveal?**
-
-- We needed an `is_premium()` method on Member (encapsulation of the membership type check)
-- FitnessClass needs both `_bookings` and `_waitlist` as separate collections
-- The `book_class` function has branching logic based on class fullness and member type
-
-This is simple code, but it works. We resisted the urge to over-engineer. We didn't create a "WaitlistStrategy" or "MembershipTypeFactory." We wrote the simplest code that makes the test pass.
-
-Now we can refactor with confidence because the test proves the behavior works.
-
-### Step 3: Refactor
-
-The `book_class` function is getting complex. It has multiple responsibilities: checking capacity, handling waitlists, deducting credits. Let's split it.
-
-```python
-class BookingService:
-    def book_class(self, member: Member, fitness_class: FitnessClass) -> Booking:
-        if fitness_class.is_full():
-            return self._handle_full_class(member, fitness_class)
-        
-        return self._confirm_booking(member, fitness_class)
-    
-    def _handle_full_class(self, member: Member, fitness_class: FitnessClass) -> Booking:
-        if not member.is_premium():
-            raise ValueError("Class is full")
-        
-        fitness_class.add_to_waitlist(member.id)
-        return self._create_booking(member.id, fitness_class.id, "waitlisted")
-    
-    def _confirm_booking(self, member: Member, fitness_class: FitnessClass) -> Booking:
-        member.deduct_credit()
-        fitness_class.add_booking(member.id)
-        return self._create_booking(member.id, fitness_class.id, "confirmed")
-    
-    def _create_booking(self, member_id: str, class_id: str, status: str) -> Booking:
-        return Booking(
-            booking_id=generate_booking_id(),
-            member_id=member_id,
-            class_id=class_id,
-            status=status,
-            booked_at=datetime.now()
-        )
-    ```
-
-    **Why this refactoring?**
-
-    The `book_class` function was doing too much: checking capacity, handling waitlists, deducting credits. It had multiple reasons to change (violates Single Responsibility Principle).
-
-    By extracting a `BookingService` class, we've:
-    - Separated concerns (each private method has one job)
-    - Made the code easier to test (we can test `_handle_full_class` independently if needed)
-    - Made the code easier to read (the public method reads like a story)
-
-    **This is the TDD cycle in action:** Red (write test) → Green (make it pass) → Refactor (improve design). Tests enabled this refactoring. We moved logic into a service class without changing behavior. The test proves it still works.
-
-    #### Adding the Second Scenario
-
-    We've tested the happy path (premium member joins waitlist). Now let's test what happens when someone cancels:
-
-    ```python
-    def test_cancellation_promotes_waitlisted_member():
-    premium_member = Member("M001", "Alice", "alice@example.com", "premium", 10)
-    basic_member = Member("M002", "Bob", "bob@example.com", "basic", 10)
-    
-    fitness_class = FitnessClass("C001", "Yoga", capacity=1)
-    
-    # Basic member books
-    booking = BookingService().book_class(basic_member, fitness_class)
-    
-    # Premium member gets waitlisted
-    waitlist_booking = BookingService().book_class(premium_member, fitness_class)
-    
-    # Basic member cancels
-    service = BookingService()
-    service.cancel_booking(basic_member, booking)
-    
-    # Premium member should be promoted
-    assert waitlist_booking.status == "confirmed"
-    assert premium_member.id in fitness_class.bookings
-    assert premium_member.id not in fitness_class.waitlist
-```
-
-**Red.** The promotion logic doesn't exist.
-
-Write the code to make it pass. Refactor. Repeat.
-
-This is TDD. Each test adds a new behavior. Each refactor improves the design. The tests guide you toward a clean, maintainable architecture.
-
-## How TDD Influences Everything That Follows
-
-The architectural patterns in the next chapters—layers, domain models, use cases, ports and adapters—all emerge naturally when you practice TDD.
-
-This isn't theory. Look at what we just built:
-
-**Tests revealed domain models.** We wrote tests for booking logic and discovered we needed:
-- `Member` that enforces its own credit rules (not a passive data bag)
-- `FitnessClass` that manages capacity and waitlists (not just properties)
-- `MembershipType` that encodes business rules (not just a string)
-
-The tests showed us these objects because we needed somewhere to put the business logic.
-
-**Tests revealed the need for layers.** Right now, `book_class()` is simple. But what happens when we add:
-- Database persistence (save the booking)
-- Email notifications (confirm the booking)
-- Payment processing (charge for the class)
-
-Suddenly your test needs a database, an email server, and a payment API just to verify that "premium members can join waitlists." That's a signal. The business logic needs to be separated from infrastructure.
-
-**Tests revealed use cases.** The `BookingService.book_class()` method we refactored? That's a use case waiting to happen. It orchestrates the workflow: check capacity, handle waitlist, deduct credits. Chapter 6 shows how to formalize this.
-
-**Tests revealed the need for abstractions.** When we test `BookingService`, we don't want to depend on a real database. We want to test the logic. This pushes us toward ports (interfaces) and adapters (implementations). Chapter 7 shows the pattern.
-
-**The key insight:** You don't need to know these patterns up front. TDD will lead you to them. When a test is hard to write, that's a signal. The code is asking for better structure. Listen to the tests—they're showing you the architecture you need.
-
-## When NOT to Use TDD
-
-TDD is powerful. But it's not always the right tool.
-
-**Exploratory coding:** When you're learning a new library or API, you don't know what the interface should be yet. Write some experimental code. Figure out how things work. Then, when you understand it, write tests and refactor.
-
-**Throwaway prototypes:** If you're building something to prove a concept and you know it'll be deleted, tests are overhead. Build it, learn from it, throw it away.
-
-**UI design:** Pixel-perfect layouts, animations, visual styling—these are hard to test-drive. Build the UI, get it looking right, then add tests for the interactions and state management.
-
-**Simple scripts:** A 20-line script that runs once to migrate data? Just write it. Tests would take longer than the script.
-
-TDD is a tool. Use it when it helps. Skip it when it doesn't.
-
-## From Tests to Structure
-
-You've built a solid testing foundation. Your gym booking system has tests for member creation, class bookings, credit deduction, and waitlist management. The red-green-refactor rhythm guides your development. Each test passes. The code works.
-
-But as the system grows, a new challenge emerges. Your tests are getting harder to write.
-
-To test booking logic, you need a database. To test notifications, you need an email server. To test API endpoints, you need the full HTTP stack running. Each test requires more setup. More dependencies. More infrastructure that has nothing to do with the business rules you're trying to verify.
-
-The tests are telling you something. They're saying: "This code is too tangled."
-
-TDD revealed the need for better structure. The domain logic—member rules, class capacity, pricing strategies—is mixed with infrastructure concerns like database persistence and email sending. Your tests want to verify business rules, but they're forced to set up technical infrastructure.
-
-**This is the signal.** When tests become difficult to write, when you can't test business logic in isolation, when infrastructure leaks into your domain—that's when you need architectural boundaries.
-
-The next chapter introduces those boundaries. We'll separate business logic from technical details. We'll organise code into layers that let you test domain rules without databases, write use cases without HTTP, and swap infrastructure without touching business logic.
-
-TDD got you here. It showed you what works and what doesn't. It built your confidence to refactor. Now it's telling you that the code needs structure—not because of architectural dogma, but because the tests are asking for it.
-
-## Summary
-
-TDD is the foundation of intentional architecture. It gives you:
-
-1. **Design feedback** - Tests tell you when code is too coupled or too complex
-2. **Safety** - Tests let you refactor confidently, knowing you won't break things
-3. **Documentation** - Tests show how code is meant to be used
-4. **Focus** - Red-Green-Refactor keeps you incremental, preventing over-engineering
-
-The chapters that follow—layers, domain modeling, ports and adapters—build on this foundation. Without TDD, those patterns feel academic. With TDD, they emerge naturally from the tests.
-
-Start simple. Write a failing test. Make it pass. Clean it up. Repeat.
-
-We've built domain objects through TDD. `Member`, `FitnessClass`, `Booking`—each tested and focused. But as we add persistence, APIs, and infrastructure, we'll discover these objects need organization. That's where layers come in.
-
-That's how architecture happens.
+That's next.
