@@ -12,6 +12,20 @@ On my journey to learn better programming, the gap between my uncoordinated code
 
 That confusion is where this book begins.
 
+## This Is a Reference Book, Not a Tutorial
+
+This book is fundamentally different from most programming books. **This is a reference guide to architectural patterns**, not a tutorial that builds a single application from start to finish.
+
+Each chapter teaches **one pattern** with a **focused, isolated example**. You can jump to any chapter without reading previous ones. The examples are intentionally small and self-contained—50 to 200 lines of complete, runnable code. They're designed to teach you the pattern clearly, not to build toward some final "complete system."
+
+**What this means for you:**
+- **Read linearly to learn:** If you're new to architecture, read front-to-back to build understanding progressively
+- **Reference later when needed:** Come back to specific chapters when facing a particular design challenge
+- **Each chapter stands alone:** Every pattern gets its own domain example, not part of a continuous project
+- **Copy and adapt:** The examples are designed to be adapted to your own projects
+
+This is intentional. Real-world architecture isn't about following a single example from start to finish. It's about knowing which pattern solves which problem and when to apply it.
+
 ## Prerequisites
 
 This book assumes you already write code. You understand variables, functions, classes, and basic object-oriented programming. You've built something that works, even if you're not entirely happy with how it's structured.
@@ -22,9 +36,22 @@ What you won't need: prior knowledge of design patterns, architectural framework
 
 ## How to Use This Book
 
-This book is designed to be read straight through. Each chapter builds on the previous one. The concepts layer deliberately, starting with philosophy and mindset, moving through principles, then into practical architecture patterns. If you jump to the middle, you'll find code examples that make sense in isolation but lack the deeper reasoning that makes them click.
+**For learners (first time reading):**
+Read the book front-to-back. While each chapter is standalone, the patterns build conceptually. Start with Chapter 1's philosophy, understand the "why," then progress through design principles, domain modeling, and architectural patterns. The early chapters establish mental models that make later patterns easier to understand.
 
-That said, once you've read it through, it works as a reference. Come back to specific chapters when you're facing a particular challenge: structuring layers, modeling domain logic, implementing ports and adapters. The chapters are designed to stand alone for that purpose. Pause when something resonates or confuses you. Question the examples. Try applying the ideas to your own projects as you go. 
+**For practitioners (using as reference):**
+Jump directly to the chapter you need. Each pattern has:
+- A clear problem statement
+- Complete, runnable code examples
+- Benefits and trade-offs
+- Common mistakes to avoid
+- Testing strategies
+
+**As you read:**
+- Pause and question the examples
+- Think about how patterns apply to your own projects
+- Don't feel obligated to use every pattern
+- Remember: architecture is about intention, not perfection 
 
 The book will be more valuable if you bring your own context to it.
 
